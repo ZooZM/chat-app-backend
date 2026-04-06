@@ -43,4 +43,38 @@ export class UsersService {
   async updateRefreshToken(id: string, refreshToken: string | null): Promise<void> {
     await this.userModel.findByIdAndUpdate(id, { refreshToken }).exec();
   }
+
+  async updateLocation(userId: string, lng: number, lat: number): Promise<void> {
+    await this.userModel.updateOne(
+      { _id: userId },
+      {
+        $set: {
+          location: {
+            type: 'Point',
+            coordinates: [lng, lat],
+          },
+        },
+      },
+    ).exec();
+  }
+
+  async getNearbyUsers(userId: string, lng: number, lat: number, maxDistanceKm: number) {
+    const maxDistanceMeters = maxDistanceKm * 1000;
+
+    return this.userModel.find({
+      _id: { $ne: userId }, // Exclude self
+      location: {
+        $nearSphere: {
+          $geometry: {
+            type: 'Point',
+            coordinates: [lng, lat],
+          },
+          $maxDistance: maxDistanceMeters,
+        },
+      },
+    })
+    .select('_id name location isOnline')
+    .exec();
+  }
 }
+

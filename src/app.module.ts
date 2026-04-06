@@ -8,6 +8,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { RedisModule } from './modules/redis/redis.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { VideoModule } from './modules/video/video.module';
+import { MapModule } from './modules/map/map.module';
 import * as Joi from 'joi';
 
 @Module({
@@ -42,6 +43,7 @@ import * as Joi from 'joi';
     RedisModule,
     ChatModule,
     VideoModule,
+    MapModule,
   ],
   controllers: [AppController],
   providers: [AppService],

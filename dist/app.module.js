@@ -50,6 +50,7 @@ const auth_module_1 = require("./modules/auth/auth.module");
 const redis_module_1 = require("./modules/redis/redis.module");
 const chat_module_1 = require("./modules/chat/chat.module");
 const video_module_1 = require("./modules/video/video.module");
+const map_module_1 = require("./modules/map/map.module");
 const Joi = __importStar(require("joi"));
 let AppModule = class AppModule {
 };
@@ -82,6 +83,7 @@ exports.AppModule = AppModule = __decorate([
             redis_module_1.RedisModule,
             chat_module_1.ChatModule,
             video_module_1.VideoModule,
+            map_module_1.MapModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [app_service_1.AppService],

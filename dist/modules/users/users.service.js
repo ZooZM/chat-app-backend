@@ -87,6 +87,33 @@ let UsersService = class UsersService {
     async updateRefreshToken(id, refreshToken) {
         await this.userModel.findByIdAndUpdate(id, { refreshToken }).exec();
     }
+    async updateLocation(userId, lng, lat) {
+        await this.userModel.updateOne({ _id: userId }, {
+            $set: {
+                location: {
+                    type: 'Point',
+                    coordinates: [lng, lat],
+                },
+            },
+        }).exec();
+    }
+    async getNearbyUsers(userId, lng, lat, maxDistanceKm) {
+        const maxDistanceMeters = maxDistanceKm * 1000;
+        return this.userModel.find({
+            _id: { $ne: userId },
+            location: {
+                $nearSphere: {
+                    $geometry: {
+                        type: 'Point',
+                        coordinates: [lng, lat],
+                    },
+                    $maxDistance: maxDistanceMeters,
+                },
+            },
+        })
+            .select('_id name location isOnline')
+            .exec();
+    }
 };
 exports.UsersService = UsersService;
 exports.UsersService = UsersService = __decorate([
