@@ -61,7 +61,7 @@ let AuthService = class AuthService {
         return this.generateAuthResponse(user);
     }
     async generateAuthResponse(user) {
-        const payload = { sub: user._id.toString(), phoneNumber: user.phoneNumber };
+        const payload = { sub: user._id.toString(), phoneNumber: user.phoneNumber, name: user.name };
         const accessTokenExpiresIn = this.configService.get('JWT_ACCESS_EXPIRES_IN') || '15m';
         const refreshTokenExpiresIn = this.configService.get('JWT_REFRESH_EXPIRES_IN') || '7d';
         const [accessToken, refreshToken] = await Promise.all([

@@ -7,6 +7,7 @@ import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { RedisModule } from './modules/redis/redis.module';
 import { ChatModule } from './modules/chat/chat.module';
+import { VideoModule } from './modules/video/video.module';
 import * as Joi from 'joi';
 
 @Module({
@@ -20,6 +21,9 @@ import * as Joi from 'joi';
         JWT_SECRET: Joi.string().required(),
         JWT_ACCESS_EXPIRES_IN: Joi.string().default('15m'),
         JWT_REFRESH_EXPIRES_IN: Joi.string().default('7d'),
+        LIVEKIT_API_KEY: Joi.string().required(),
+        LIVEKIT_API_SECRET: Joi.string().required(),
+        LIVEKIT_WS_URL: Joi.string().required(),
       }),
     }),
     
@@ -37,6 +41,7 @@ import * as Joi from 'joi';
     AuthModule,
     RedisModule,
     ChatModule,
+    VideoModule,
   ],
   controllers: [AppController],
   providers: [AppService],

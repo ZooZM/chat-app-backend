@@ -49,6 +49,7 @@ const users_module_1 = require("./modules/users/users.module");
 const auth_module_1 = require("./modules/auth/auth.module");
 const redis_module_1 = require("./modules/redis/redis.module");
 const chat_module_1 = require("./modules/chat/chat.module");
+const video_module_1 = require("./modules/video/video.module");
 const Joi = __importStar(require("joi"));
 let AppModule = class AppModule {
 };
@@ -64,6 +65,9 @@ exports.AppModule = AppModule = __decorate([
                     JWT_SECRET: Joi.string().required(),
                     JWT_ACCESS_EXPIRES_IN: Joi.string().default('15m'),
                     JWT_REFRESH_EXPIRES_IN: Joi.string().default('7d'),
+                    LIVEKIT_API_KEY: Joi.string().required(),
+                    LIVEKIT_API_SECRET: Joi.string().required(),
+                    LIVEKIT_WS_URL: Joi.string().required(),
                 }),
             }),
             mongoose_1.MongooseModule.forRootAsync({
@@ -77,6 +81,7 @@ exports.AppModule = AppModule = __decorate([
             auth_module_1.AuthModule,
             redis_module_1.RedisModule,
             chat_module_1.ChatModule,
+            video_module_1.VideoModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [app_service_1.AppService],
