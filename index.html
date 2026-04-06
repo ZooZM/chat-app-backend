@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NestJS Chat Gateway Tester | Premium Client</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- Socket.io Client -->
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --bg-dark: #0f172a;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --success: #22c55e;
+            --error: #ef4444;
+            --warning: #f59e0b;
+            --border: rgba(255, 255, 255, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+
+        body {
+            background: radial-gradient(circle at top left, #1e1b4b, #0f172a);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem;
+        }
+
+        .tester-card {
+            width: 100%;
+            max-width: 800px;
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 2.5rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            animation: fadeIn 0.6s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        header {
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(to right, #818cf8, #c084fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+        }
+
+        header p {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        @media (max-width: 640px) {
+            .grid { grid-template-columns: 1fr; }
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            background: rgba(15, 23, 42, 0.4);
+            padding: 1.5rem;
+            border-radius: 16px;
+            border: 1px solid var(--border);
+        }
+
+        .control-group h3 {
+            font-size: 0.875rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            margin-bottom: 0.5rem;
+        }
+
+        .input-wrapper {
+            position: relative;
+        }
+
+        input {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 0.75rem 1rem;
+            color: white;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--primary);
+            background: rgba(0, 0, 0, 0.4);
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+        }
+
+        button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            padding: 0.75rem 1.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        button:hover {
+            background: var(--primary-hover);
+            transform: translateY(-1px);
+        }
+
+        button:active {
+            transform: translateY(1px);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .logs-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .logs-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #logs {
+            height: 300px;
+            background: #020617;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1rem;
+            overflow-y: auto;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            line-height: 1.5;
+        }
+
+        .log-entry {
+            margin-bottom: 0.5rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            animation: slideIn 0.2s ease-out;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(-5px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        .log-time { color: var(--text-muted); margin-right: 0.5rem; }
+        .log-info { color: #38bdf8; }
+        .log-success { color: var(--success); }
+        .log-error { color: var(--error); background: rgba(239, 68, 68, 0.1); }
+        .log-warning { color: var(--warning); }
+        .log-msg { color: #f472b6; }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--text-muted);
+            display: inline-block;
+            margin-right: 6px;
+        }
+
+        .status-connected { background: var(--success); box-shadow: 0 0 8px var(--success); }
+        .status-disconnected { background: var(--error); }
+    </style>
+</head>
+<body>
+
+<div class="tester-card">
+    <header>
+        <h1>Socket.io Gateway Tester</h1>
+        <p>Debug and verify your NestJS real-time communication</p>
+    </header>
+
+    <div class="grid">
+        <!-- Auth Section -->
+        <div class="control-group">
+            <h3>1. Authentication</h3>
+            <div class="input-wrapper">
+                <input type="password" id="token" placeholder="Bearer Access Token...">
+            </div>
+            <div class="input-wrapper">
+                <input type="text" id="url" value="http://localhost:3000" placeholder="Gateway URL...">
+            </div>
+            <button id="connectBtn">
+                <span id="statusDot" class="status-dot"></span>
+                <span id="connectText">Connect to Gateway</span>
+            </button>
+        </div>
+
+        <!-- Room & Message Section -->
+        <div class="control-group">
+            <h3>2. Room & Interaction</h3>
+            <div class="input-wrapper">
+                <input type="text" id="roomId" placeholder="Target Room ID (MongoID)">
+            </div>
+            <button id="joinBtn" disabled>Join Room</button>
+            <div class="input-wrapper">
+                <input type="text" id="message" placeholder="Type message contents...">
+            </div>
+            <button id="sendBtn" disabled>Send Message</button>
+        </div>
+    </div>
+
+    <!-- Logs Section -->
+    <div class="logs-container">
+        <div class="logs-header">
+            <h3>Events & Traffic</h3>
+            <button id="clearBtn" style="padding: 0.25rem 0.75rem; font-size: 0.75rem; background: rgba(255,255,255,0.1);">Clear</button>
+        </div>
+        <div id="logs">
+            <div class="log-entry log-info">Client ready. Please connect to start monitoring events.</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const tokenInput = document.getElementById('token');
+    const urlInput = document.getElementById('url');
+    const roomIdInput = document.getElementById('roomId');
+    const messageInput = document.getElementById('message');
+    
+    const connectBtn = document.getElementById('connectBtn');
+    const joinBtn = document.getElementById('joinBtn');
+    const sendBtn = document.getElementById('sendBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    
+    const logs = document.getElementById('logs');
+    const statusDot = document.getElementById('statusDot');
+    const connectText = document.getElementById('connectText');
+
+    let socket;
+
+    function addLog(text, type = 'info') {
+        const div = document.createElement('div');
+        div.className = `log-entry log-${type}`;
+        
+        const timeSpan = document.createElement('span');
+        timeSpan.className = 'log-time';
+        timeSpan.textContent = new Date().toLocaleTimeString();
+        
+        const contentSpan = document.createElement('span');
+        contentSpan.textContent = text;
+        
+        div.appendChild(timeSpan);
+        div.appendChild(contentSpan);
+        
+        logs.appendChild(div);
+        logs.scrollTop = logs.scrollHeight;
+    }
+
+    function setStatus(connected) {
+        if (connected) {
+            statusDot.className = 'status-dot status-connected';
+            connectText.textContent = 'Disconnect';
+            joinBtn.disabled = false;
+            sendBtn.disabled = false;
+        } else {
+            statusDot.className = 'status-dot status-disconnected';
+            connectText.textContent = 'Connect to Gateway';
+            joinBtn.disabled = true;
+            sendBtn.disabled = true;
+        }
+    }
+
+    connectBtn.onclick = () => {
+        if (socket && socket.connected) {
+            socket.disconnect();
+            return;
+        }
+
+        const token = tokenInput.value.trim();
+        const url = urlInput.value.trim();
+
+        if (!token) {
+            addLog('Error: JWT Token is required', 'error');
+            return;
+        }
+
+        addLog(`Attempting connection to ${url}...`, 'info');
+        
+        socket = io(url, {
+            auth: { token: token.replace('Bearer ', '') },
+            transports: ['websocket']
+        });
+
+        socket.on('connect', () => {
+            addLog(`Connected! ID: ${socket.id}`, 'success');
+            setStatus(true);
+        });
+
+        socket.on('disconnect', (reason) => {
+            addLog(`Disconnected: ${reason}`, 'error');
+            setStatus(false);
+        });
+
+        socket.on('connect_error', (err) => {
+            addLog(`Connection Error: ${err.message}`, 'error');
+            setStatus(false);
+        });
+
+        // Gateway specific listeners
+        socket.on('newMessage', (data) => {
+            addLog(`[New Message] ${data.senderId}: ${data.content}`, 'msg');
+        });
+
+        socket.on('userTyping', (data) => {
+            addLog(`[Typing] User ${data.userId} is ${data.isTyping ? 'typing...' : 'idle'}`, 'warning');
+        });
+
+        socket.on('joinedRoom', (roomId) => {
+            addLog(`Server Confirmed: Joined ${roomId}`, 'success');
+        });
+
+        socket.on('error', (message) => {
+            addLog(`Server Error: ${message}`, 'error');
+        });
+    };
+
+    joinBtn.onclick = () => {
+        const roomId = roomIdInput.value.trim();
+        if (!roomId) {
+            addLog('Error: Room ID required', 'error');
+            return;
+        }
+        addLog(`Emitting joinRoom for ${roomId}...`, 'info');
+        socket.emit('joinRoom', { roomId: roomId });
+    };
+
+    sendBtn.onclick = () => {
+        const roomId = roomIdInput.value.trim();
+        const content = messageInput.value.trim();
+        
+        if (!roomId || !content) {
+            addLog('Error: Room ID and content required', 'error');
+            return;
+        }
+
+        addLog(`Emitting sendMessage to ${roomId}...`, 'info');
+        socket.emit('sendMessage', {
+            chatRoomId: roomId,
+            content: content
+        });
+        messageInput.value = '';
+    };
+
+    clearBtn.onclick = () => {
+        logs.innerHTML = '<div class="log-entry log-info">Logs cleared.</div>';
+    };
+</script>
+
+</body>
+</html>

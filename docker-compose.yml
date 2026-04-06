@@ -1,0 +1,20 @@
+version: '3.8'
+services:
+  redis:
+    image: redis:alpine
+    container_name: chat-redis
+    ports:
+      - '6379:6379'
+    restart: unless-stopped
+
+  mongodb:
+    image: mongo:latest
+    container_name: chat-mongodb
+    ports:
+      - '27017:27017'
+    restart: unless-stopped
+    volumes:
+      - mongodb_data:/data/db
+
+volumes:
+  mongodb_data:
