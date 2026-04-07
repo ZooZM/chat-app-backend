@@ -43,6 +43,9 @@ exports.AppModule = void 0;
 const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
 const mongoose_1 = require("@nestjs/mongoose");
+const throttler_1 = require("@nestjs/throttler");
+const nestjs_throttler_storage_redis_1 = require("nestjs-throttler-storage-redis");
+const bullmq_1 = require("@nestjs/bullmq");
 const app_controller_1 = require("./app.controller");
 const app_service_1 = require("./app.service");
 const users_module_1 = require("./modules/users/users.module");
@@ -63,12 +66,35 @@ exports.AppModule = AppModule = __decorate([
                 validationSchema: Joi.object({
                     PORT: Joi.number().default(3000),
                     MONGODB_URI: Joi.string().required(),
+                    REDIS_URL: Joi.string().default('redis://localhost:6379'),
                     JWT_SECRET: Joi.string().required(),
                     JWT_ACCESS_EXPIRES_IN: Joi.string().default('15m'),
                     JWT_REFRESH_EXPIRES_IN: Joi.string().default('7d'),
                     LIVEKIT_API_KEY: Joi.string().required(),
                     LIVEKIT_API_SECRET: Joi.string().required(),
                     LIVEKIT_WS_URL: Joi.string().required(),
+                }),
+            }),
+            throttler_1.ThrottlerModule.forRootAsync({
+                imports: [config_1.ConfigModule],
+                inject: [config_1.ConfigService],
+                useFactory: (config) => ({
+                    throttlers: [
+                        {
+                            ttl: 60000,
+                            limit: 100,
+                        },
+                    ],
+                    storage: new nestjs_throttler_storage_redis_1.ThrottlerStorageRedisService(config.get('REDIS_URL') || 'redis://localhost:6379'),
+                }),
+            }),
+            bullmq_1.BullModule.forRootAsync({
+                imports: [config_1.ConfigModule],
+                inject: [config_1.ConfigService],
+                useFactory: async (configService) => ({
+                    connection: {
+                        url: configService.get('REDIS_URL') || 'redis://localhost:6379',
+                    },
                 }),
             }),
             mongoose_1.MongooseModule.forRootAsync({

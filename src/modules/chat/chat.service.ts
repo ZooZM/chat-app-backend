@@ -1,74 +1,47 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
+import { Types } from 'mongoose';
 import { ChatRoom, ChatRoomDocument } from './schemas/chat-room.schema';
 import { Message, MessageDocument, MessageStatus } from './schemas/message.schema';
 import { SendMessageDto } from './dto/send-message.dto';
+import { ChatRoomsRepository } from './chat-rooms.repository';
+import { MessagesRepository } from './messages.repository';
 
 @Injectable()
 export class ChatService {
   constructor(
-    @InjectModel(ChatRoom.name) private chatRoomModel: Model<ChatRoomDocument>,
-    @InjectModel(Message.name) private messageModel: Model<MessageDocument>,
+    private readonly chatRoomsRepository: ChatRoomsRepository,
+    private readonly messagesRepository: MessagesRepository,
   ) {}
 
   async createPrivateRoom(userA: string, userB: string): Promise<ChatRoomDocument> {
-    const participants = [new Types.ObjectId(userA), new Types.ObjectId(userB)];
-    const existing = await this.chatRoomModel.findOne({
-      type: 'PRIVATE',
-      participants: { $all: participants, $size: 2 },
-    });
+    const existing = await this.chatRoomsRepository.findPrivateRoom(userA, userB);
     if (existing) return existing;
 
-    const newRoom = new this.chatRoomModel({ type: 'PRIVATE', participants });
-    return newRoom.save();
+    const participants = [new Types.ObjectId(userA), new Types.ObjectId(userB)];
+    return this.chatRoomsRepository.create({ type: 'PRIVATE', participants });
   }
 
   async saveMessage(senderId: string, payload: SendMessageDto): Promise<MessageDocument> {
-    const room = await this.chatRoomModel.findById(payload.chatRoomId);
+    const room = await this.chatRoomsRepository.findById(payload.chatRoomId);
     if (!room) throw new NotFoundException('Chat room not found');
 
-    const message = new this.messageModel({
+    const savedMessage = await this.messagesRepository.create({
       chatRoomId: new Types.ObjectId(payload.chatRoomId),
       senderId: new Types.ObjectId(senderId),
       content: payload.content,
       status: MessageStatus.SENT,
     });
 
-    const savedMessage = await message.save();
-
-    room.lastMessage = savedMessage._id as Types.ObjectId;
-    await room.save();
+    await this.chatRoomsRepository.updateLastMessage(payload.chatRoomId, savedMessage._id.toString());
 
     return savedMessage;
   }
 
   async getUserRooms(userId: string, limit = 20, cursor?: string) {
-    const query: any = { participants: new Types.ObjectId(userId) };
-    if (cursor) {
-      query._id = { $lt: new Types.ObjectId(cursor) };
-    }
-
-    return this.chatRoomModel
-      .find(query)
-      .sort({ updatedAt: -1 })
-      .limit(limit)
-      .populate('lastMessage')
-      .populate('participants', 'name phoneNumber')
-      .exec();
+    return this.chatRoomsRepository.getUserRooms(userId, limit, cursor);
   }
 
   async getRoomMessages(roomId: string, limit = 50, cursor?: string) {
-    const query: any = { chatRoomId: new Types.ObjectId(roomId) };
-    if (cursor) {
-      query._id = { $lt: new Types.ObjectId(cursor) };
-    }
-
-    return this.messageModel
-      .find(query)
-      .sort({ createdAt: -1 }) // Return newest first for standard chat scroll
-      .limit(limit)
-      .populate('senderId', 'name phoneNumber')
-      .exec();
+    return this.messagesRepository.getRoomMessages(roomId, limit, cursor);
   }
 }

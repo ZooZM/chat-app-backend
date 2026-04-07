@@ -1,13 +1,11 @@
+import { Model } from 'mongoose';
+import { BaseRepository } from '../../common/repositories/base.repository';
 import { User, UserDocument } from './schemas/user.schema';
-import { UsersRepository } from './users.repository';
-export declare class UsersService {
-    private readonly usersRepository;
-    constructor(usersRepository: UsersRepository);
-    create(createData: Partial<User>): Promise<UserDocument>;
-    findByPhoneNumber(phoneNumber: string): Promise<UserDocument | null>;
+export declare class UsersRepository extends BaseRepository<UserDocument> {
+    private readonly userModel;
+    constructor(userModel: Model<UserDocument>);
     findById(id: string): Promise<UserDocument | null>;
-    updateRefreshToken(id: string, refreshToken: string | null): Promise<void>;
-    updateLocation(userId: string, lng: number, lat: number): Promise<void>;
+    findByPhoneNumber(phoneNumber: string): Promise<UserDocument | null>;
     getNearbyUsers(userId: string, lng: number, lat: number, maxDistanceKm: number): Promise<(import("mongoose").Document<unknown, {}, UserDocument, {}, import("mongoose").DefaultSchemaOptions> & User & import("mongoose").Document<import("mongoose").Types.ObjectId, any, any, Record<string, any>, {}> & Required<{
         _id: import("mongoose").Types.ObjectId;
     }> & {

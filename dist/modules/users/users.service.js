@@ -41,24 +41,19 @@ var __importStar = (this && this.__importStar) || (function () {
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
-var __param = (this && this.__param) || function (paramIndex, decorator) {
-    return function (target, key) { decorator(target, key, paramIndex); }
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.UsersService = void 0;
 const common_1 = require("@nestjs/common");
-const mongoose_1 = require("@nestjs/mongoose");
-const mongoose_2 = require("mongoose");
-const user_schema_1 = require("./schemas/user.schema");
 const bcrypt = __importStar(require("bcrypt"));
+const users_repository_1 = require("./users.repository");
 let UsersService = class UsersService {
-    userModel;
-    constructor(userModel) {
-        this.userModel = userModel;
+    usersRepository;
+    constructor(usersRepository) {
+        this.usersRepository = usersRepository;
     }
     async create(createData) {
         try {
-            const existingUser = await this.userModel.findOne({ phoneNumber: createData.phoneNumber });
+            const existingUser = await this.usersRepository.findByPhoneNumber(createData.phoneNumber);
             if (existingUser) {
                 throw new common_1.ConflictException('User with this phone number already exists');
             }
@@ -66,11 +61,11 @@ let UsersService = class UsersService {
             if (createData.password) {
                 hashedPassword = await bcrypt.hash(createData.password, 10);
             }
-            const newUser = new this.userModel({
+            const newUser = await this.usersRepository.create({
                 ...createData,
                 ...(hashedPassword && { password: hashedPassword }),
             });
-            return await newUser.save();
+            return newUser;
         }
         catch (error) {
             if (error instanceof common_1.ConflictException)
@@ -79,46 +74,31 @@ let UsersService = class UsersService {
         }
     }
     async findByPhoneNumber(phoneNumber) {
-        return this.userModel.findOne({ phoneNumber }).exec();
+        return this.usersRepository.findByPhoneNumber(phoneNumber);
     }
     async findById(id) {
-        return this.userModel.findById(id).exec();
+        return this.usersRepository.findById(id);
     }
     async updateRefreshToken(id, refreshToken) {
-        await this.userModel.findByIdAndUpdate(id, { refreshToken }).exec();
+        await this.usersRepository.updateOne({ _id: id }, { refreshToken });
     }
     async updateLocation(userId, lng, lat) {
-        await this.userModel.updateOne({ _id: userId }, {
+        await this.usersRepository.updateOne({ _id: userId }, {
             $set: {
                 location: {
                     type: 'Point',
                     coordinates: [lng, lat],
                 },
             },
-        }).exec();
+        });
     }
     async getNearbyUsers(userId, lng, lat, maxDistanceKm) {
-        const maxDistanceMeters = maxDistanceKm * 1000;
-        return this.userModel.find({
-            _id: { $ne: userId },
-            location: {
-                $nearSphere: {
-                    $geometry: {
-                        type: 'Point',
-                        coordinates: [lng, lat],
-                    },
-                    $maxDistance: maxDistanceMeters,
-                },
-            },
-        })
-            .select('_id name location isOnline')
-            .exec();
+        return this.usersRepository.getNearbyUsers(userId, lng, lat, maxDistanceKm);
     }
 };
 exports.UsersService = UsersService;
 exports.UsersService = UsersService = __decorate([
     (0, common_1.Injectable)(),
-    __param(0, (0, mongoose_1.InjectModel)(user_schema_1.User.name)),
-    __metadata("design:paramtypes", [mongoose_2.Model])
+    __metadata("design:paramtypes", [users_repository_1.UsersRepository])
 ], UsersService);
 //# sourceMappingURL=users.service.js.map

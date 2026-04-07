@@ -16,6 +16,8 @@ const chat_service_1 = require("./chat.service");
 const chat_gateway_1 = require("./chat.gateway");
 const chat_controller_1 = require("./chat.controller");
 const jwt_1 = require("@nestjs/jwt");
+const chat_rooms_repository_1 = require("./chat-rooms.repository");
+const messages_repository_1 = require("./messages.repository");
 let ChatModule = class ChatModule {
 };
 exports.ChatModule = ChatModule;
@@ -29,7 +31,8 @@ exports.ChatModule = ChatModule = __decorate([
             auth_module_1.AuthModule,
             jwt_1.JwtModule,
         ],
-        providers: [chat_service_1.ChatService, chat_gateway_1.ChatGateway],
+        providers: [chat_service_1.ChatService, chat_gateway_1.ChatGateway, chat_rooms_repository_1.ChatRoomsRepository, messages_repository_1.MessagesRepository],
+        exports: [chat_service_1.ChatService, chat_rooms_repository_1.ChatRoomsRepository, messages_repository_1.MessagesRepository],
         controllers: [chat_controller_1.ChatController],
     })
 ], ChatModule);

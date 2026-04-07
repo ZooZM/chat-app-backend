@@ -7,6 +7,8 @@ import { ChatService } from './chat.service';
 import { ChatGateway } from './chat.gateway';
 import { ChatController } from './chat.controller';
 import { JwtModule } from '@nestjs/jwt';
+import { ChatRoomsRepository } from './chat-rooms.repository';
+import { MessagesRepository } from './messages.repository';
 
 @Module({
   imports: [
@@ -17,7 +19,8 @@ import { JwtModule } from '@nestjs/jwt';
     AuthModule, // Enables importing passport strategies / general auth config
     JwtModule, // Assuming JwtModule was exported natively by AuthModule, but adding explicitly safely if needed
   ],
-  providers: [ChatService, ChatGateway],
+  providers: [ChatService, ChatGateway, ChatRoomsRepository, MessagesRepository],
+  exports: [ChatService, ChatRoomsRepository, MessagesRepository],
   controllers: [ChatController],
 })
 export class ChatModule {}
