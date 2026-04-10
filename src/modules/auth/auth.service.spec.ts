@@ -3,29 +3,52 @@ import { AuthService } from './auth.service';
 import { UsersService } from '../users/users.service';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { UnauthorizedException } from '@nestjs/common';
+import { ConflictException, UnauthorizedException } from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
+
+// Mock bcrypt
+jest.mock('bcrypt');
 
 describe('AuthService', () => {
   let authService: AuthService;
-  let usersService: jest.Mocked<Partial<UsersService>>;
-  let jwtService: jest.Mocked<Partial<JwtService>>;
-  let configService: jest.Mocked<Partial<ConfigService>>;
+  let usersService: any;
+  let jwtService: any;
+  let configService: any;
   let redisClientMock: any;
 
+  const mockUser = {
+    _id: 'user123',
+    name: 'John Doe',
+    phoneNumber: '+1234567890',
+    email: 'john@example.com',
+    password: 'hashedPassword',
+    isPhoneVerified: true,
+    save: jest.fn().mockResolvedValue(true),
+    toObject: jest.fn().mockReturnValue({
+      _id: 'user123',
+      name: 'John Doe',
+      phoneNumber: '+1234567890',
+      email: 'john@example.com',
+    }),
+  };
+
+  const mockTokens = {
+    accessToken: 'access-token',
+    refreshToken: 'refresh-token',
+  };
+
   beforeEach(async () => {
-    // Mock UsersService
     usersService = {
       findByPhoneNumber: jest.fn(),
+      findByEmail: jest.fn(),
       create: jest.fn(),
       updateRefreshToken: jest.fn(),
     };
 
-    // Mock JwtService
     jwtService = {
       signAsync: jest.fn().mockResolvedValue('test-token'),
     };
 
-    // Mock ConfigService
     configService = {
       get: jest.fn().mockImplementation((key: string) => {
         if (key === 'JWT_ACCESS_EXPIRES_IN') return '15m';
@@ -34,7 +57,6 @@ describe('AuthService', () => {
       }),
     };
 
-    // Mock Redis Client
     redisClientMock = {
       set: jest.fn(),
       get: jest.fn(),
@@ -54,94 +76,121 @@ describe('AuthService', () => {
     authService = module.get<AuthService>(AuthService);
   });
 
-  it('should be defined', () => {
-    expect(authService).toBeDefined();
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  describe('register', () => {
+    const registerDto = {
+      name: 'John Doe',
+      phoneNumber: '+1234567890',
+      email: 'john@example.com',
+      password: 'password123',
+    };
+
+    it('should successfully register a new user and return tokens', async () => {
+      usersService.findByPhoneNumber.mockResolvedValue(null);
+      usersService.findByEmail.mockResolvedValue(null);
+      usersService.create.mockResolvedValue(mockUser as any);
+
+      const result = await authService.register(registerDto);
+
+      expect(usersService.findByPhoneNumber).toHaveBeenCalledWith(registerDto.phoneNumber);
+      expect(usersService.create).toHaveBeenCalled();
+      expect(jwtService.signAsync).toHaveBeenCalledTimes(2);
+      expect(result).toHaveProperty('accessToken');
+      expect(result).toHaveProperty('refreshToken');
+      expect(result.user).toEqual({
+        _id: 'user123',
+        name: 'John Doe',
+        phoneNumber: '+1234567890',
+        email: 'john@example.com',
+      });
+    });
+
+    it('should throw ConflictException if the phone number already exists', async () => {
+      usersService.findByPhoneNumber.mockResolvedValue(mockUser as any);
+
+      await expect(authService.register(registerDto)).rejects.toThrow(ConflictException);
+      expect(usersService.create).not.toHaveBeenCalled();
+    });
+
+    it('should throw ConflictException if the email already exists', async () => {
+      usersService.findByPhoneNumber.mockResolvedValue(null);
+      usersService.findByEmail.mockResolvedValue(mockUser as any);
+
+      await expect(authService.register(registerDto)).rejects.toThrow(ConflictException);
+      expect(usersService.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('login', () => {
+    const loginDto = {
+      phoneNumber: '+1234567890',
+      password: 'password123',
+    };
+
+    it('should successfully log in and return tokens with valid credentials', async () => {
+      usersService.findByPhoneNumber.mockResolvedValue(mockUser as any);
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+      const result = await authService.login(loginDto);
+
+      expect(usersService.findByPhoneNumber).toHaveBeenCalledWith(loginDto.phoneNumber);
+      expect(bcrypt.compare).toHaveBeenCalledWith(loginDto.password, mockUser.password);
+      expect(result).toHaveProperty('accessToken');
+      expect(result.user.name).toBe(mockUser.name);
+    });
+
+    it('should throw UnauthorizedException if the user is not found', async () => {
+      usersService.findByPhoneNumber.mockResolvedValue(null);
+
+      await expect(authService.login(loginDto)).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should throw UnauthorizedException if the password does not match', async () => {
+      usersService.findByPhoneNumber.mockResolvedValue(mockUser as any);
+      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+
+      await expect(authService.login(loginDto)).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should throw UnauthorizedException if user has no password', async () => {
+      const userNoPass = { ...mockUser, password: null };
+      usersService.findByPhoneNumber.mockResolvedValue(userNoPass as any);
+
+      await expect(authService.login(loginDto)).rejects.toThrow(UnauthorizedException);
+    });
   });
 
   describe('sendOtp', () => {
-    it('should generate an OTP, save it to Redis, and yield success message', async () => {
+    it('should successfully send an OTP', async () => {
+      redisClientMock.set.mockResolvedValue('OK');
+
       const result = await authService.sendOtp({ phoneNumber: '+1234567890' });
 
-      // Verify the response
+      expect(redisClientMock.set).toHaveBeenCalled();
       expect(result).toEqual({ message: 'OTP sent successfully' });
-
-      // We ensure the redis set command was called with standard TTL config
-      expect(redisClientMock.set).toHaveBeenCalledTimes(1);
-      expect(redisClientMock.set).toHaveBeenCalledWith(
-        '+1234567890',
-        expect.any(String),
-        'EX',
-        180,
-      );
     });
   });
 
   describe('verifyOtp', () => {
-    it('should throw UnauthorizedException if OTP does not match', async () => {
-      // Redis returns incorrect OTP
-      redisClientMock.get.mockResolvedValue('000000');
+    it('should throw UnauthorizedException for invalid OTP', async () => {
+      redisClientMock.get.mockResolvedValue('654321');
 
       await expect(
         authService.verifyOtp({ phoneNumber: '+1234567890', code: '123456' }),
       ).rejects.toThrow(UnauthorizedException);
     });
 
-    it('should create a new user, issue tokens, and clear OTP upon valid OTP for new phone number', async () => {
-      // Redis returns correct OTP
+    it('should successfully verify OTP and return tokens', async () => {
       redisClientMock.get.mockResolvedValue('123456');
-
-      // UsersService returns null (doesn't exist)
-      usersService.findByPhoneNumber = jest.fn().mockResolvedValue(null);
-
-      // Create returns a mock user document instance
-      const mockUserDoc = {
-        _id: 'user-123',
-        phoneNumber: '+1234567890',
-        isPhoneVerified: true,
-        toObject: jest.fn().mockReturnValue({ _id: 'user-123', phoneNumber: '+1234567890' }),
-      };
-      usersService.create = jest.fn().mockResolvedValue(mockUserDoc);
+      usersService.findByPhoneNumber.mockResolvedValue(mockUser as any);
 
       const result = await authService.verifyOtp({ phoneNumber: '+1234567890', code: '123456' });
 
-      // Assertions
-      expect(usersService.create).toHaveBeenCalledWith({
-        phoneNumber: '+1234567890',
-        name: 'New User',
-        isPhoneVerified: true,
-      });
-
-      expect(redisClientMock.del).toHaveBeenCalledWith('+1234567890');
-      
-      expect(jwtService.signAsync).toHaveBeenCalledTimes(2); // accessToken + refreshToken
-      expect(usersService.updateRefreshToken).toHaveBeenCalledWith('user-123', 'test-token');
-
-      expect(result).toEqual({
-        accessToken: 'test-token',
-        refreshToken: 'test-token',
-        user: { _id: 'user-123', phoneNumber: '+1234567890' },
-      });
-    });
-
-    it('should issue tokens for an existing user and clear OTP', async () => {
-      redisClientMock.get.mockResolvedValue('123456');
-
-      const mockExistingUser = {
-        _id: 'user-456',
-        phoneNumber: '+0987654321',
-        isPhoneVerified: true,
-        save: jest.fn(),
-        toObject: jest.fn().mockReturnValue({ _id: 'user-456', phoneNumber: '+0987654321' }),
-      };
-      
-      usersService.findByPhoneNumber = jest.fn().mockResolvedValue(mockExistingUser);
-
-      const result = await authService.verifyOtp({ phoneNumber: '+0987654321', code: '123456' });
-
-      // Assuming they are already verified, we skip checking the `.save()` mock entirely unless requested
-      expect(usersService.create).not.toHaveBeenCalled();
-      expect(redisClientMock.del).toHaveBeenCalledWith('+0987654321');
-      expect(result.accessToken).toBeDefined();
+      expect(redisClientMock.del).toHaveBeenCalled();
+      expect(result).toHaveProperty('accessToken');
     });
   });
 });

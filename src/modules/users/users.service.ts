@@ -35,6 +35,10 @@ export class UsersService {
     return this.usersRepository.findByPhoneNumber(phoneNumber);
   }
 
+  async findByEmail(email: string): Promise<UserDocument | null> {
+    return this.usersRepository.findOne({ email } as any);
+  }
+
   async findById(id: string): Promise<UserDocument | null> {
     return this.usersRepository.findById(id);
   }

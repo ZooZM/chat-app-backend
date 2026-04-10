@@ -31,7 +31,7 @@ async function bootstrap() {
     app.useGlobalInterceptors(new global_response_interceptor_1.GlobalResponseInterceptor());
     app.useGlobalFilters(new global_exception_filter_1.GlobalExceptionFilter());
     const port = process.env.PORT || 3000;
-    await app.listen(port);
+    await app.listen(port, '0.0.0.0');
     console.log(`🚀 Chat API is running on: http://localhost:${port}`);
 }
 bootstrap();

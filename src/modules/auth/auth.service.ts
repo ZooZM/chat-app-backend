@@ -1,10 +1,13 @@
-import { Injectable, UnauthorizedException, Inject } from '@nestjs/common';
+import { Injectable, UnauthorizedException, Inject, ConflictException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import { SendOtpDto } from './dto/send-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
+import { RegisterDto } from './dto/register.dto';
+import { LoginDto } from './dto/login.dto';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class AuthService {
@@ -54,6 +57,54 @@ export class AuthService {
 
     // Clear the OTP
     await this.redisClient.del(phoneNumber);
+
+    return this.generateAuthResponse(user);
+  }
+
+  async register(registerDto: RegisterDto) {
+    const { name, phoneNumber, email, password } = registerDto;
+
+    // Check if user already exists
+    if (phoneNumber) {
+      const existingPhone = await this.usersService.findByPhoneNumber(phoneNumber);
+      if (existingPhone) throw new ConflictException('User with this phone number already exists');
+    }
+    if (email) {
+      const existingEmail = await this.usersService.findByEmail(email);
+      if (existingEmail) throw new ConflictException('User with this email already exists');
+    }
+
+    // usersService.create handles bcrypt hashing internally
+    const user = await this.usersService.create({
+      name,
+      phoneNumber,
+      email,
+      password,
+      isPhoneVerified: false,
+    });
+
+    return this.generateAuthResponse(user);
+  }
+
+  async login(loginDto: LoginDto) {
+    const { phoneNumber, email, password } = loginDto;
+
+    let user;
+    if (phoneNumber) {
+      user = await this.usersService.findByPhoneNumber(phoneNumber);
+    } else if (email) {
+      user = await this.usersService.findByEmail(email);
+    }
+
+    if (!user || !user.password) {
+      // If user registered with OTP only, they might not have a password
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
 
     return this.generateAuthResponse(user);
   }

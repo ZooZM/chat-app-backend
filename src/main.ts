@@ -43,7 +43,7 @@ async function bootstrap() {
   // in the AppModule rather than main.ts for better Dependency Injection lifecycle support.
 
   const port = process.env.PORT || 3000;
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
   console.log(`🚀 Chat API is running on: http://localhost:${port}`);
 }
 bootstrap();
