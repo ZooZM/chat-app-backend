@@ -50,6 +50,25 @@ let ChatRoomsRepository = class ChatRoomsRepository extends base_repository_1.Ba
     async findById(roomId) {
         return this.chatRoomModel.findById(roomId).exec();
     }
+    async getUserRoomIds(userId) {
+        return this.chatRoomModel
+            .find({ participants: new mongoose_2.Types.ObjectId(userId) })
+            .select('_id')
+            .lean()
+            .exec();
+    }
+    async addParticipants(roomId, userIds) {
+        return this.chatRoomModel.findByIdAndUpdate(roomId, { $addToSet: { participants: { $each: userIds } } }, { new: true }).exec();
+    }
+    async removeParticipant(roomId, userId) {
+        return this.chatRoomModel.findByIdAndUpdate(roomId, { $pull: { participants: userId } }, { new: true }).exec();
+    }
+    async removeAdmin(roomId, phoneNumber) {
+        return this.chatRoomModel.findByIdAndUpdate(roomId, { $pull: { admins: phoneNumber } }, { new: true }).exec();
+    }
+    async addAdmin(roomId, phoneNumber) {
+        return this.chatRoomModel.findByIdAndUpdate(roomId, { $addToSet: { admins: phoneNumber } }, { new: true }).exec();
+    }
 };
 exports.ChatRoomsRepository = ChatRoomsRepository;
 exports.ChatRoomsRepository = ChatRoomsRepository = __decorate([

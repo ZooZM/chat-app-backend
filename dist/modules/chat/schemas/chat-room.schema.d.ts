@@ -6,8 +6,11 @@ export declare enum ChatRoomType {
 export type ChatRoomDocument = ChatRoom & Document;
 export declare class ChatRoom {
     participants: Types.ObjectId[];
-    type: string;
+    type: ChatRoomType;
     lastMessage?: Types.ObjectId;
+    name?: string;
+    avatarUrl?: string;
+    admins: string[];
 }
 export declare const ChatRoomSchema: import("mongoose").Schema<ChatRoom, import("mongoose").Model<ChatRoom, any, any, any, any, any, ChatRoom>, {}, {}, {}, {}, import("mongoose").DefaultSchemaOptions, ChatRoom, Document<unknown, {}, ChatRoom, {
     id: string;
@@ -27,7 +30,7 @@ export declare const ChatRoomSchema: import("mongoose").Schema<ChatRoom, import(
     }, "id"> & {
         id: string;
     }> | undefined;
-    type?: import("mongoose").SchemaDefinitionProperty<string, ChatRoom, Document<unknown, {}, ChatRoom, {
+    type?: import("mongoose").SchemaDefinitionProperty<ChatRoomType, ChatRoom, Document<unknown, {}, ChatRoom, {
         id: string;
     }, import("mongoose").DefaultSchemaOptions> & Omit<ChatRoom & {
         _id: Types.ObjectId;
@@ -37,6 +40,33 @@ export declare const ChatRoomSchema: import("mongoose").Schema<ChatRoom, import(
         id: string;
     }> | undefined;
     lastMessage?: import("mongoose").SchemaDefinitionProperty<Types.ObjectId | undefined, ChatRoom, Document<unknown, {}, ChatRoom, {
+        id: string;
+    }, import("mongoose").DefaultSchemaOptions> & Omit<ChatRoom & {
+        _id: Types.ObjectId;
+    } & {
+        __v: number;
+    }, "id"> & {
+        id: string;
+    }> | undefined;
+    name?: import("mongoose").SchemaDefinitionProperty<string | undefined, ChatRoom, Document<unknown, {}, ChatRoom, {
+        id: string;
+    }, import("mongoose").DefaultSchemaOptions> & Omit<ChatRoom & {
+        _id: Types.ObjectId;
+    } & {
+        __v: number;
+    }, "id"> & {
+        id: string;
+    }> | undefined;
+    avatarUrl?: import("mongoose").SchemaDefinitionProperty<string | undefined, ChatRoom, Document<unknown, {}, ChatRoom, {
+        id: string;
+    }, import("mongoose").DefaultSchemaOptions> & Omit<ChatRoom & {
+        _id: Types.ObjectId;
+    } & {
+        __v: number;
+    }, "id"> & {
+        id: string;
+    }> | undefined;
+    admins?: import("mongoose").SchemaDefinitionProperty<string[], ChatRoom, Document<unknown, {}, ChatRoom, {
         id: string;
     }, import("mongoose").DefaultSchemaOptions> & Omit<ChatRoom & {
         _id: Types.ObjectId;

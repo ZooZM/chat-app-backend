@@ -43,4 +43,60 @@ export class ChatRoomsRepository extends BaseRepository<ChatRoomDocument> {
   async findById(roomId: string): Promise<ChatRoomDocument | null> {
     return this.chatRoomModel.findById(roomId).exec();
   }
+
+  /**
+   * Returns only the _id of every room a user belongs to.
+   * Used by ChatGateway on connect to auto-join socket.io rooms efficiently.
+   */
+  async getUserRoomIds(userId: string): Promise<{ _id: any }[]> {
+    return this.chatRoomModel
+      .find({ participants: new Types.ObjectId(userId) })
+      .select('_id')
+      .lean()
+      .exec();
+  }
+
+  /**
+   * Adds participant ObjectIds to the room using $addToSet (idempotent).
+   */
+  async addParticipants(roomId: string, userIds: Types.ObjectId[]): Promise<ChatRoomDocument | null> {
+    return this.chatRoomModel.findByIdAndUpdate(
+      roomId,
+      { $addToSet: { participants: { $each: userIds } } },
+      { new: true },
+    ).exec();
+  }
+
+  /**
+   * Removes a single participant ObjectId from the room.
+   */
+  async removeParticipant(roomId: string, userId: Types.ObjectId): Promise<ChatRoomDocument | null> {
+    return this.chatRoomModel.findByIdAndUpdate(
+      roomId,
+      { $pull: { participants: userId } },
+      { new: true },
+    ).exec();
+  }
+
+  /**
+   * Removes a phone number from the admins array of a group.
+   */
+  async removeAdmin(roomId: string, phoneNumber: string): Promise<ChatRoomDocument | null> {
+    return this.chatRoomModel.findByIdAndUpdate(
+      roomId,
+      { $pull: { admins: phoneNumber } },
+      { new: true },
+    ).exec();
+  }
+
+  /**
+   * Promotes a phone number to admin.
+   */
+  async addAdmin(roomId: string, phoneNumber: string): Promise<ChatRoomDocument | null> {
+    return this.chatRoomModel.findByIdAndUpdate(
+      roomId,
+      { $addToSet: { admins: phoneNumber } },
+      { new: true },
+    ).exec();
+  }
 }

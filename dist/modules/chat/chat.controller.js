@@ -16,6 +16,8 @@ exports.ChatController = void 0;
 const common_1 = require("@nestjs/common");
 const chat_service_1 = require("./chat.service");
 const jwt_auth_guard_1 = require("../../common/guards/jwt-auth.guard");
+const group_dto_1 = require("./dto/group.dto");
+const resolve_private_chat_dto_1 = require("./dto/resolve-private-chat.dto");
 let ChatController = class ChatController {
     chatService;
     constructor(chatService) {
@@ -28,6 +30,38 @@ let ChatController = class ChatController {
     async getRoomMessages(roomId, limit, cursor) {
         const l = limit ? parseInt(limit.toString(), 10) : 50;
         return this.chatService.getRoomMessages(roomId, l, cursor);
+    }
+    async resolvePrivateChat(req, dto) {
+        const { roomId, room } = await this.chatService.resolvePrivateRoom(req.user.userId, dto.phoneNumber);
+        return { roomId, room };
+    }
+    async createGroup(req, dto) {
+        const { userId, phoneNumber } = req.user;
+        const group = await this.chatService.createGroup(phoneNumber, userId, dto);
+        return {
+            message: `Group "${dto.name}" created successfully.`,
+            data: group,
+        };
+    }
+    async addParticipants(req, roomId, dto) {
+        const { phoneNumber } = req.user;
+        const updated = await this.chatService.addParticipants(phoneNumber, roomId, dto);
+        return {
+            message: `${dto.phoneNumbersToAdd.length} participant(s) added.`,
+            data: updated,
+        };
+    }
+    async removeParticipant(req, roomId, dto) {
+        const { phoneNumber } = req.user;
+        const updated = await this.chatService.removeParticipant(phoneNumber, roomId, dto);
+        return {
+            message: `${dto.phoneNumberToRemove} has been removed from the group.`,
+            data: updated,
+        };
+    }
+    async leaveGroup(req, roomId) {
+        const { userId, phoneNumber } = req.user;
+        return this.chatService.leaveGroup(phoneNumber, userId, roomId);
     }
 };
 exports.ChatController = ChatController;
@@ -49,6 +83,53 @@ __decorate([
     __metadata("design:paramtypes", [String, Number, String]),
     __metadata("design:returntype", Promise)
 ], ChatController.prototype, "getRoomMessages", null);
+__decorate([
+    (0, common_1.Post)('private/resolve'),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, resolve_private_chat_dto_1.ResolvePrivateChatDto]),
+    __metadata("design:returntype", Promise)
+], ChatController.prototype, "resolvePrivateChat", null);
+__decorate([
+    (0, common_1.Post)('group/create'),
+    (0, common_1.HttpCode)(common_1.HttpStatus.CREATED),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, group_dto_1.CreateGroupDto]),
+    __metadata("design:returntype", Promise)
+], ChatController.prototype, "createGroup", null);
+__decorate([
+    (0, common_1.Post)('group/:roomId/add'),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Param)('roomId')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, group_dto_1.AddParticipantsDto]),
+    __metadata("design:returntype", Promise)
+], ChatController.prototype, "addParticipants", null);
+__decorate([
+    (0, common_1.Post)('group/:roomId/remove'),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Param)('roomId')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, group_dto_1.RemoveParticipantDto]),
+    __metadata("design:returntype", Promise)
+], ChatController.prototype, "removeParticipant", null);
+__decorate([
+    (0, common_1.Post)('group/:roomId/leave'),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Param)('roomId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", Promise)
+], ChatController.prototype, "leaveGroup", null);
 exports.ChatController = ChatController = __decorate([
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     (0, common_1.Controller)('chat'),

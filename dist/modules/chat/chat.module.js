@@ -10,6 +10,7 @@ exports.ChatModule = void 0;
 const common_1 = require("@nestjs/common");
 const mongoose_1 = require("@nestjs/mongoose");
 const auth_module_1 = require("../auth/auth.module");
+const users_module_1 = require("../users/users.module");
 const chat_room_schema_1 = require("./schemas/chat-room.schema");
 const message_schema_1 = require("./schemas/message.schema");
 const chat_service_1 = require("./chat.service");
@@ -29,6 +30,7 @@ exports.ChatModule = ChatModule = __decorate([
                 { name: message_schema_1.Message.name, schema: message_schema_1.MessageSchema },
             ]),
             auth_module_1.AuthModule,
+            users_module_1.UsersModule,
             jwt_1.JwtModule,
         ],
         providers: [chat_service_1.ChatService, chat_gateway_1.ChatGateway, chat_rooms_repository_1.ChatRoomsRepository, messages_repository_1.MessagesRepository],

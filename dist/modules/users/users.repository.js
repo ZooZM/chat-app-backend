@@ -30,6 +30,13 @@ let UsersRepository = class UsersRepository extends base_repository_1.BaseReposi
     async findByPhoneNumber(phoneNumber) {
         return this.findOne({ phoneNumber });
     }
+    async findByPhoneNumbers(phoneNumbers) {
+        return this.userModel
+            .find({ phoneNumber: { $in: phoneNumbers } })
+            .select('_id name phoneNumber avatarUrl isOnline updatedAt')
+            .lean()
+            .exec();
+    }
     async getNearbyUsers(userId, lng, lat, maxDistanceKm) {
         const maxDistanceMeters = maxDistanceKm * 1000;
         return this.userModel.find({

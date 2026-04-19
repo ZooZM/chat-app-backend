@@ -18,6 +18,19 @@ export class UsersRepository extends BaseRepository<UserDocument> {
     return this.findOne({ phoneNumber });
   }
 
+  /**
+   * Find all registered users whose phoneNumber is in the provided array.
+   * SECURITY: Only safe public fields are projected — password, refreshToken,
+   * email, fcmToken, and subscription details are never returned.
+   */
+  async findByPhoneNumbers(phoneNumbers: string[]): Promise<Partial<UserDocument>[]> {
+    return this.userModel
+      .find({ phoneNumber: { $in: phoneNumbers } })
+      .select('_id name phoneNumber avatarUrl isOnline updatedAt')
+      .lean()
+      .exec();
+  }
+
   async getNearbyUsers(userId: string, lng: number, lat: number, maxDistanceKm: number) {
     const maxDistanceMeters = maxDistanceKm * 1000;
 

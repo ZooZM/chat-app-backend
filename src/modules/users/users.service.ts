@@ -5,7 +5,7 @@ import { UsersRepository } from './users.repository';
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly usersRepository: UsersRepository) {}
+  constructor(private readonly usersRepository: UsersRepository) { }
 
   async create(createData: Partial<User>): Promise<UserDocument> {
     try {
@@ -63,5 +63,20 @@ export class UsersService {
 
   async getNearbyUsers(userId: string, lng: number, lat: number, maxDistanceKm: number) {
     return this.usersRepository.getNearbyUsers(userId, lng, lat, maxDistanceKm);
+  }
+
+  /**
+   * Given a list of phone numbers from the device contact list,
+   * returns only those that are registered users in the app.
+   * Only safe public fields are returned (no password, no tokens).
+   */
+  async syncContacts(phoneNumbers: string[]) {
+    return this.usersRepository.findByPhoneNumbers(phoneNumbers);
+  }
+
+  async updateOnlineStatus(userId: string, isOnline: boolean): Promise<void> {
+    await this.usersRepository.updateOne({ _id: userId } as any, { isOnline });
+    const user = await this.usersRepository.findById(userId);
+    console.log(`User ${userId} is ${user?.isOnline}`);
   }
 }

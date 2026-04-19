@@ -6,6 +6,7 @@ export declare class UsersRepository extends BaseRepository<UserDocument> {
     constructor(userModel: Model<UserDocument>);
     findById(id: string): Promise<UserDocument | null>;
     findByPhoneNumber(phoneNumber: string): Promise<UserDocument | null>;
+    findByPhoneNumbers(phoneNumbers: string[]): Promise<Partial<UserDocument>[]>;
     getNearbyUsers(userId: string, lng: number, lat: number, maxDistanceKm: number): Promise<(import("mongoose").Document<unknown, {}, UserDocument, {}, import("mongoose").DefaultSchemaOptions> & User & import("mongoose").Document<import("mongoose").Types.ObjectId, any, any, Record<string, any>, {}> & Required<{
         _id: import("mongoose").Types.ObjectId;
     }> & {

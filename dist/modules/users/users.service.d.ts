@@ -5,6 +5,7 @@ export declare class UsersService {
     constructor(usersRepository: UsersRepository);
     create(createData: Partial<User>): Promise<UserDocument>;
     findByPhoneNumber(phoneNumber: string): Promise<UserDocument | null>;
+    findByEmail(email: string): Promise<UserDocument | null>;
     findById(id: string): Promise<UserDocument | null>;
     updateRefreshToken(id: string, refreshToken: string | null): Promise<void>;
     updateLocation(userId: string, lng: number, lat: number): Promise<void>;
@@ -15,4 +16,6 @@ export declare class UsersService {
     } & {
         id: string;
     })[]>;
+    syncContacts(phoneNumbers: string[]): Promise<Partial<UserDocument>[]>;
+    updateOnlineStatus(userId: string, isOnline: boolean): Promise<void>;
 }

@@ -76,6 +76,9 @@ let UsersService = class UsersService {
     async findByPhoneNumber(phoneNumber) {
         return this.usersRepository.findByPhoneNumber(phoneNumber);
     }
+    async findByEmail(email) {
+        return this.usersRepository.findOne({ email });
+    }
     async findById(id) {
         return this.usersRepository.findById(id);
     }
@@ -94,6 +97,14 @@ let UsersService = class UsersService {
     }
     async getNearbyUsers(userId, lng, lat, maxDistanceKm) {
         return this.usersRepository.getNearbyUsers(userId, lng, lat, maxDistanceKm);
+    }
+    async syncContacts(phoneNumbers) {
+        return this.usersRepository.findByPhoneNumbers(phoneNumbers);
+    }
+    async updateOnlineStatus(userId, isOnline) {
+        await this.usersRepository.updateOne({ _id: userId }, { isOnline });
+        const user = await this.usersRepository.findById(userId);
+        console.log(`User ${userId} is ${user?.isOnline}`);
     }
 };
 exports.UsersService = UsersService;

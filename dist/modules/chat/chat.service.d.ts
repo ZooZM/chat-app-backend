@@ -1,14 +1,35 @@
 import { ChatRoomDocument } from './schemas/chat-room.schema';
 import { MessageDocument } from './schemas/message.schema';
 import { SendMessageDto } from './dto/send-message.dto';
+import { CreateGroupDto, AddParticipantsDto, RemoveParticipantDto } from './dto/group.dto';
 import { ChatRoomsRepository } from './chat-rooms.repository';
 import { MessagesRepository } from './messages.repository';
+import { UsersRepository } from '../users/users.repository';
 export declare class ChatService {
     private readonly chatRoomsRepository;
     private readonly messagesRepository;
-    constructor(chatRoomsRepository: ChatRoomsRepository, messagesRepository: MessagesRepository);
+    private readonly usersRepository;
+    constructor(chatRoomsRepository: ChatRoomsRepository, messagesRepository: MessagesRepository, usersRepository: UsersRepository);
     createPrivateRoom(userA: string, userB: string): Promise<ChatRoomDocument>;
+    resolvePrivateRoom(requesterId: string, targetPhoneNumber: string): Promise<{
+        roomId: string;
+        room: ChatRoomDocument;
+    }>;
     saveMessage(senderId: string, payload: SendMessageDto): Promise<MessageDocument>;
+    private saveSystemMessage;
     getUserRooms(userId: string, limit?: number, cursor?: string): Promise<ChatRoomDocument[]>;
+    getUserRoomsForSocket(userId: string): Promise<{
+        _id: any;
+    }[]>;
     getRoomMessages(roomId: string, limit?: number, cursor?: string): Promise<MessageDocument[]>;
+    markMessagesRead(userId: string, roomId: string, messageIds: string[]): Promise<void>;
+    createGroup(creatorPhoneNumber: string, creatorId: string, dto: CreateGroupDto): Promise<ChatRoomDocument>;
+    addParticipants(requesterPhoneNumber: string, roomId: string, dto: AddParticipantsDto): Promise<ChatRoomDocument>;
+    removeParticipant(requesterPhoneNumber: string, roomId: string, dto: RemoveParticipantDto): Promise<ChatRoomDocument>;
+    leaveGroup(requesterPhoneNumber: string, requesterUserId: string, roomId: string): Promise<{
+        message: string;
+    }>;
+    private findGroupOrFail;
+    private assertIsAdmin;
+    private resolvePhoneNumbersToObjectIds;
 }

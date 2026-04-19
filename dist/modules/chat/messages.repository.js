@@ -36,6 +36,9 @@ let MessagesRepository = class MessagesRepository extends base_repository_1.Base
             .populate('senderId', 'name phoneNumber')
             .exec();
     }
+    async markRead(messageIds, phoneNumber) {
+        await this.messageModel.updateMany({ _id: { $in: messageIds.map((id) => new mongoose_2.Types.ObjectId(id)) } }, { $addToSet: { readBy: phoneNumber } }).exec();
+    }
 };
 exports.MessagesRepository = MessagesRepository;
 exports.MessagesRepository = MessagesRepository = __decorate([

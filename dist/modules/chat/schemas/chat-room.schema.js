@@ -21,6 +21,9 @@ let ChatRoom = class ChatRoom {
     participants;
     type;
     lastMessage;
+    name;
+    avatarUrl;
+    admins;
 };
 exports.ChatRoom = ChatRoom;
 __decorate([
@@ -35,8 +38,21 @@ __decorate([
     (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: 'Message', required: false }),
     __metadata("design:type", mongoose_2.Types.ObjectId)
 ], ChatRoom.prototype, "lastMessage", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ type: String, required: false, trim: true }),
+    __metadata("design:type", String)
+], ChatRoom.prototype, "name", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ type: String, required: false }),
+    __metadata("design:type", String)
+], ChatRoom.prototype, "avatarUrl", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ type: [String], default: [] }),
+    __metadata("design:type", Array)
+], ChatRoom.prototype, "admins", void 0);
 exports.ChatRoom = ChatRoom = __decorate([
     (0, mongoose_1.Schema)({ timestamps: true })
 ], ChatRoom);
 exports.ChatRoomSchema = mongoose_1.SchemaFactory.createForClass(ChatRoom);
+exports.ChatRoomSchema.index({ participants: 1, updatedAt: -1 });
 //# sourceMappingURL=chat-room.schema.js.map

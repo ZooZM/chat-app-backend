@@ -9,24 +9,26 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.MessageSchema = exports.Message = exports.MessageStatus = void 0;
+exports.MessageSchema = exports.Message = exports.MessageType = void 0;
 const mongoose_1 = require("@nestjs/mongoose");
 const mongoose_2 = require("mongoose");
-var MessageStatus;
-(function (MessageStatus) {
-    MessageStatus["SENT"] = "SENT";
-    MessageStatus["DELIVERED"] = "DELIVERED";
-    MessageStatus["READ"] = "READ";
-})(MessageStatus || (exports.MessageStatus = MessageStatus = {}));
+var MessageType;
+(function (MessageType) {
+    MessageType["TEXT"] = "TEXT";
+    MessageType["IMAGE"] = "IMAGE";
+    MessageType["SYSTEM"] = "SYSTEM";
+})(MessageType || (exports.MessageType = MessageType = {}));
 let Message = class Message {
     chatRoomId;
     senderId;
     content;
-    status;
+    messageType;
+    deliveredTo;
+    readBy;
 };
 exports.Message = Message;
 __decorate([
-    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: 'ChatRoom', required: true }),
+    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: 'ChatRoom', required: true, index: true }),
     __metadata("design:type", mongoose_2.Types.ObjectId)
 ], Message.prototype, "chatRoomId", void 0);
 __decorate([
@@ -38,11 +40,20 @@ __decorate([
     __metadata("design:type", String)
 ], Message.prototype, "content", void 0);
 __decorate([
-    (0, mongoose_1.Prop)({ type: String, enum: MessageStatus, default: MessageStatus.SENT }),
+    (0, mongoose_1.Prop)({ type: String, enum: MessageType, default: MessageType.TEXT }),
     __metadata("design:type", String)
-], Message.prototype, "status", void 0);
+], Message.prototype, "messageType", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ type: [String], default: [] }),
+    __metadata("design:type", Array)
+], Message.prototype, "deliveredTo", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ type: [String], default: [] }),
+    __metadata("design:type", Array)
+], Message.prototype, "readBy", void 0);
 exports.Message = Message = __decorate([
     (0, mongoose_1.Schema)({ timestamps: true })
 ], Message);
 exports.MessageSchema = mongoose_1.SchemaFactory.createForClass(Message);
+exports.MessageSchema.index({ chatRoomId: 1, _id: -1 });
 //# sourceMappingURL=message.schema.js.map

@@ -23,4 +23,15 @@ export class MessagesRepository extends BaseRepository<MessageDocument> {
       .populate('senderId', 'name phoneNumber')
       .exec();
   }
+
+  /**
+   * Idempotently marks messages as read by a given phoneNumber.
+   * Uses $addToSet so repeated calls for the same user are a no-op.
+   */
+  async markRead(messageIds: string[], phoneNumber: string): Promise<void> {
+    await this.messageModel.updateMany(
+      { _id: { $in: messageIds.map((id) => new Types.ObjectId(id)) } },
+      { $addToSet: { readBy: phoneNumber } },
+    ).exec();
+  }
 }

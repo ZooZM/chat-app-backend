@@ -2,6 +2,8 @@ import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import { SendOtpDto } from './dto/send-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
+import { RegisterDto } from './dto/register.dto';
+import { LoginDto } from './dto/login.dto';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 export declare class AuthService {
@@ -14,6 +16,16 @@ export declare class AuthService {
         message: string;
     }>;
     verifyOtp(verifyOtpDto: VerifyOtpDto): Promise<{
+        accessToken: string;
+        refreshToken: string;
+        user: any;
+    }>;
+    register(registerDto: RegisterDto): Promise<{
+        accessToken: string;
+        refreshToken: string;
+        user: any;
+    }>;
+    login(loginDto: LoginDto): Promise<{
         accessToken: string;
         refreshToken: string;
         user: any;
