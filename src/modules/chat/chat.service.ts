@@ -40,12 +40,12 @@ export class ChatService {
    */
   async resolvePrivateRoom(
     requesterId: string,
-    targetPhoneNumber: string,
+    targetUserId: string,
   ): Promise<{ roomId: string; room: ChatRoomDocument }> {
     // 1. Look up target user by phone number
-    const targetUser = await this.usersRepository.findByPhoneNumber(targetPhoneNumber);
+    const targetUser = await this.usersRepository.findById(targetUserId);
     if (!targetUser) {
-      throw new NotFoundException(`User with phone number "${targetPhoneNumber}" is not registered.`);
+      throw new NotFoundException(`User with ID "${targetUserId}" is not registered.`);
     }
 
     const targetId = targetUser._id.toString();
@@ -68,20 +68,40 @@ export class ChatService {
   // Messages
   // ─────────────────────────────────────────────────────────────────────────────
 
-  async saveMessage(senderId: string, payload: SendMessageDto): Promise<MessageDocument> {
+  async saveMessage(
+    senderId: string,
+    payload: SendMessageDto,
+  ): Promise<{ message: MessageDocument; isNew: boolean }> {
     const room = await this.chatRoomsRepository.findById(payload.chatRoomId);
     if (!room) throw new NotFoundException('Chat room not found');
+
+    // ── Idempotency guard ────────────────────────────────────────────────────
+    // If this clientMessageId already exists in MongoDB the client is retrying
+    // after a lost acknowledgment. Return the existing document without saving
+    // or broadcasting again — the gateway will still emit messageSent so the
+    // client knows the ACK was received.
+    if (payload.clientMessageId) {
+      const existing = await this.messagesRepository.findByClientMessageId(
+        payload.clientMessageId,
+      );
+      if (existing) {
+        return { message: existing, isNew: false };
+      }
+    }
 
     const savedMessage = await this.messagesRepository.create({
       chatRoomId: new Types.ObjectId(payload.chatRoomId),
       senderId: new Types.ObjectId(senderId),
       content: payload.content,
-      // messageType defaults to TEXT in the schema; deliveredTo/readBy default to []
+      clientMessageId: payload.clientMessageId,
     });
 
-    await this.chatRoomsRepository.updateLastMessage(payload.chatRoomId, savedMessage._id.toString());
+    await this.chatRoomsRepository.updateLastMessage(
+      payload.chatRoomId,
+      savedMessage._id.toString(),
+    );
 
-    return savedMessage;
+    return { message: savedMessage, isNew: true };
   }
 
   /** Saves a SYSTEM message (e.g. "User X created the group"). No sender. */
@@ -120,8 +140,24 @@ export class ChatService {
       throw new ForbiddenException('Unauthorized to read messages in this room');
     }
 
-    // لو تمام، نبعت المصفوفة للـ Repository يكمل شغله وتعمل .map() بأمان
     return this.messagesRepository.markRead(messageIds, userId);
+  }
+
+  async markMessagesDelivered(userId: string, roomId: string, messageIds: string[]) {
+    const room = await this.chatRoomsRepository.findOne({
+      _id: roomId,
+      participants: userId,
+    });
+
+    if (!room) {
+      throw new ForbiddenException('Unauthorized to mark messages as delivered in this room');
+    }
+
+    return this.messagesRepository.markDelivered(messageIds, userId);
+  }
+
+  async syncStatuses(clientMessageIds: string[]) {
+    return this.messagesRepository.fetchStatusesByClientIds(clientMessageIds);
   }
 
   // ─────────────────────────────────────────────────────────────────────────────

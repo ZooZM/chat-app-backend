@@ -6,5 +6,5 @@ export class ResolvePrivateChatDto {
    */
   @IsString()
   @IsNotEmpty()
-  phoneNumber: string;
+  userId: string;
 }

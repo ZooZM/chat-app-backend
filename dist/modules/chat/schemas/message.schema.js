@@ -9,7 +9,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.MessageSchema = exports.Message = exports.MessageType = void 0;
+exports.MessageSchema = exports.Message = exports.MessageStatus = exports.MessageType = void 0;
 const mongoose_1 = require("@nestjs/mongoose");
 const mongoose_2 = require("mongoose");
 var MessageType;
@@ -18,11 +18,20 @@ var MessageType;
     MessageType["IMAGE"] = "IMAGE";
     MessageType["SYSTEM"] = "SYSTEM";
 })(MessageType || (exports.MessageType = MessageType = {}));
+var MessageStatus;
+(function (MessageStatus) {
+    MessageStatus["PENDING"] = "pending";
+    MessageStatus["SENT"] = "sent";
+    MessageStatus["DELIVERED"] = "delivered";
+    MessageStatus["READ"] = "read";
+})(MessageStatus || (exports.MessageStatus = MessageStatus = {}));
 let Message = class Message {
     chatRoomId;
     senderId;
     content;
+    clientMessageId;
     messageType;
+    status;
     deliveredTo;
     readBy;
 };
@@ -40,9 +49,17 @@ __decorate([
     __metadata("design:type", String)
 ], Message.prototype, "content", void 0);
 __decorate([
+    (0, mongoose_1.Prop)({ type: String, required: false }),
+    __metadata("design:type", String)
+], Message.prototype, "clientMessageId", void 0);
+__decorate([
     (0, mongoose_1.Prop)({ type: String, enum: MessageType, default: MessageType.TEXT }),
     __metadata("design:type", String)
 ], Message.prototype, "messageType", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ type: String, enum: MessageStatus, default: MessageStatus.SENT }),
+    __metadata("design:type", String)
+], Message.prototype, "status", void 0);
 __decorate([
     (0, mongoose_1.Prop)({ type: [String], default: [] }),
     __metadata("design:type", Array)

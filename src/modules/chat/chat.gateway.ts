@@ -15,6 +15,7 @@ import { AccessToken } from 'livekit-server-sdk';
 import { ChatService } from './chat.service';
 import { SendMessageDto } from './dto/send-message.dto';
 import { MarkReadDto } from './dto/mark-read.dto';
+import { MarkDeliveredDto } from './dto/mark-delivered.dto';
 import { UsersService } from '../users/users.service';
 import { RequestCallDto } from './dto/request-call.dto';
 import { AcceptCallDto } from './dto/accept-call.dto';
@@ -139,12 +140,22 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     try {
       console.log('🚀 Payload received from Flutter:', payload);
 
-      const savedMessage = await this.chatService.saveMessage(client.user.userId, payload);
+      const { message, isNew } = await this.chatService.saveMessage(client.user.userId, payload);
 
-      client.emit('messageDelivered', { messageId: payload.messageId });
+      // ── Always ACK the sender ────────────────────────────────────────────────
+      // Emit messageSent regardless of whether the message is new or a duplicate.
+      // If isNew=false the client is retrying after a dropped ACK — it still
+      // needs this confirmation to promote the message from pending → sent.
+      client.emit('messageSent', { clientMessageId: payload.clientMessageId });
 
-
-      client.broadcast.to(payload.chatRoomId).emit('newMessage', savedMessage);
+      // ── Only broadcast on first delivery ─────────────────────────────────────
+      // Suppress newMessage for duplicates so recipients never see the same
+      // message twice (idempotency contract).
+      if (isNew) {
+        client.broadcast.to(payload.chatRoomId).emit('newMessage', message);
+      } else {
+        console.log(`⚡ Duplicate suppressed for clientMessageId: ${payload.clientMessageId}`);
+      }
 
     } catch (e) {
       console.error('Send Message Error:', e.message);
@@ -167,8 +178,38 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   /**
-   * Marks messages as read for this user and broadcasts the read receipts
-   * to the room so all group members can update their UI.
+   * Used when a client physically receives the active packet to track 2 grey ticks.
+   */
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  @SubscribeMessage('markDelivered')
+  async handleMarkDelivered(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() payload: MarkDeliveredDto,
+  ) {
+    if (!client.user) return;
+
+    try {
+      console.log('🚀 Payload received from Flutter(markDelivered):', payload);
+      const idsToMark = payload.clientMessageIds ? payload.clientMessageIds : (payload.clientMessageId ? [payload.clientMessageId] : []);
+      if (idsToMark.length === 0) return;
+
+      await this.chatService.markMessagesDelivered(client.user.userId, payload.chatRoomId, idsToMark);
+
+      // Determine sender's identity. For now broadcast locally to everyone except this user but ideate targeted soon.
+      // Wait, we need to find the specific sender's socket. In a 1-on-1 chat, the "other" person is the target.
+      client.broadcast.to(payload.chatRoomId).emit('messageDelivered', {
+        chatRoomId: payload.chatRoomId,
+        clientMessageIds: idsToMark,
+        deliveredTo: client.user.userId,
+      });
+
+    } catch (e) {
+      console.error('🛡️ Mark Delivered Error:', e.message);
+    }
+  }
+
+  /**
+   * Marks messages as read (2 blue ticks).
    */
   @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
   @SubscribeMessage('markRead')
@@ -179,14 +220,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (!client.user) return;
 
     try {
-      const idsToMark = payload.messageIds ? payload.messageIds : (payload.messageId ? [payload.messageId] : []);
-      console.log('🚀 Payload received from Flutter:', payload);
+      const idsToMark = payload.clientMessageIds ? payload.clientMessageIds : (payload.clientMessageId ? [payload.clientMessageId] : []);
       if (idsToMark.length === 0) return;
 
       await this.chatService.markMessagesRead(client.user.userId, payload.chatRoomId, idsToMark);
-      client.broadcast.to(payload.chatRoomId).emit('messagesRead', {
+
+      client.broadcast.to(payload.chatRoomId).emit('messageRead', {
         chatRoomId: payload.chatRoomId,
-        messageIds: idsToMark,
+        clientMessageIds: idsToMark,
         readBy: client.user.userId,
       });
 

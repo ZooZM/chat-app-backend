@@ -4,12 +4,20 @@ export declare enum MessageType {
     IMAGE = "IMAGE",
     SYSTEM = "SYSTEM"
 }
+export declare enum MessageStatus {
+    PENDING = "pending",
+    SENT = "sent",
+    DELIVERED = "delivered",
+    READ = "read"
+}
 export type MessageDocument = Message & Document;
 export declare class Message {
     chatRoomId: Types.ObjectId;
     senderId: Types.ObjectId;
     content: string;
+    clientMessageId: string;
     messageType: MessageType;
+    status: MessageStatus;
     deliveredTo: string[];
     readBy: string[];
 }
@@ -49,7 +57,25 @@ export declare const MessageSchema: import("mongoose").Schema<Message, import("m
     }, "id"> & {
         id: string;
     }> | undefined;
+    clientMessageId?: import("mongoose").SchemaDefinitionProperty<string, Message, Document<unknown, {}, Message, {
+        id: string;
+    }, import("mongoose").DefaultSchemaOptions> & Omit<Message & {
+        _id: Types.ObjectId;
+    } & {
+        __v: number;
+    }, "id"> & {
+        id: string;
+    }> | undefined;
     messageType?: import("mongoose").SchemaDefinitionProperty<MessageType, Message, Document<unknown, {}, Message, {
+        id: string;
+    }, import("mongoose").DefaultSchemaOptions> & Omit<Message & {
+        _id: Types.ObjectId;
+    } & {
+        __v: number;
+    }, "id"> & {
+        id: string;
+    }> | undefined;
+    status?: import("mongoose").SchemaDefinitionProperty<MessageStatus, Message, Document<unknown, {}, Message, {
         id: string;
     }, import("mongoose").DefaultSchemaOptions> & Omit<Message & {
         _id: Types.ObjectId;

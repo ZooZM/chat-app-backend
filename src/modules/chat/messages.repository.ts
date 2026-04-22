@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { BaseRepository } from '../../common/repositories/base.repository';
-import { Message, MessageDocument } from './schemas/message.schema';
+import { Message, MessageDocument, MessageStatus } from './schemas/message.schema';
 
 @Injectable()
 export class MessagesRepository extends BaseRepository<MessageDocument> {
@@ -24,14 +24,40 @@ export class MessagesRepository extends BaseRepository<MessageDocument> {
       .exec();
   }
 
+  async markDelivered(messageIds: string[], phoneNumber: string): Promise<void> {
+    await this.messageModel.updateMany({ clientMessageId: { $in: messageIds } }, {
+      $addToSet: { deliveredTo: phoneNumber },
+      $set: { status: MessageStatus.DELIVERED },
+    }).exec();
+  }
+
   /**
    * Idempotently marks messages as read by a given phoneNumber.
    * Uses $addToSet so repeated calls for the same user are a no-op.
    */
   async markRead(messageIds: string[], phoneNumber: string): Promise<void> {
     await this.messageModel.updateMany(
-      { _id: { $in: messageIds.map((id) => new Types.ObjectId(id)) } },
-      { $addToSet: { readBy: phoneNumber } },
+      { clientMessageId: { $in: messageIds } },
+      { 
+        $addToSet: { readBy: phoneNumber, deliveredTo: phoneNumber },
+        $set: { status: MessageStatus.READ },
+      },
     ).exec();
+  }
+
+  /**
+   * Finds a single message document by its client-generated UUID.
+   * Used by ChatService.saveMessage() to enforce idempotency on duplicate sends.
+   */
+  async findByClientMessageId(clientMessageId: string): Promise<MessageDocument | null> {
+    return this.findOne({ clientMessageId });
+  }
+
+  async fetchStatusesByClientIds(clientMessageIds: string[]): Promise<{ clientMessageId: string; status: MessageStatus }[]> {
+    return this.messageModel
+        .find({ clientMessageId: { $in: clientMessageIds } })
+        .select('clientMessageId status')
+        .lean()
+        .exec() as unknown as { clientMessageId: string; status: MessageStatus }[];
   }
 }

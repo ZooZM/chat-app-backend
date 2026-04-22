@@ -14,7 +14,7 @@ const class_validator_1 = require("class-validator");
 class SendMessageDto {
     chatRoomId;
     content;
-    messageId;
+    clientMessageId;
     messageIds;
     type;
 }
@@ -33,7 +33,7 @@ __decorate([
     (0, class_validator_1.IsNotEmpty)(),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
-], SendMessageDto.prototype, "messageId", void 0);
+], SendMessageDto.prototype, "clientMessageId", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsArray)(),

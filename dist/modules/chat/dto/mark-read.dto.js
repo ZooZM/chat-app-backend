@@ -13,8 +13,8 @@ exports.MarkReadDto = void 0;
 const class_validator_1 = require("class-validator");
 class MarkReadDto {
     chatRoomId;
-    messageId;
-    messageIds;
+    clientMessageId;
+    clientMessageIds;
 }
 exports.MarkReadDto = MarkReadDto;
 __decorate([
@@ -26,11 +26,11 @@ __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
-], MarkReadDto.prototype, "messageId", void 0);
+], MarkReadDto.prototype, "clientMessageId", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsArray)(),
     (0, class_validator_1.IsString)({ each: true }),
     __metadata("design:type", Array)
-], MarkReadDto.prototype, "messageIds", void 0);
+], MarkReadDto.prototype, "clientMessageIds", void 0);
 //# sourceMappingURL=mark-read.dto.js.map

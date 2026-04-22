@@ -32,8 +32,11 @@ let ChatController = class ChatController {
         return this.chatService.getRoomMessages(roomId, l, cursor);
     }
     async resolvePrivateChat(req, dto) {
-        const { roomId, room } = await this.chatService.resolvePrivateRoom(req.user.userId, dto.phoneNumber);
+        const { roomId, room } = await this.chatService.resolvePrivateRoom(req.user.userId, dto.userId);
         return { roomId, room };
+    }
+    async syncStatuses(dto) {
+        return this.chatService.syncStatuses(dto.clientMessageIds);
     }
     async createGroup(req, dto) {
         const { userId, phoneNumber } = req.user;
@@ -92,6 +95,14 @@ __decorate([
     __metadata("design:paramtypes", [Object, resolve_private_chat_dto_1.ResolvePrivateChatDto]),
     __metadata("design:returntype", Promise)
 ], ChatController.prototype, "resolvePrivateChat", null);
+__decorate([
+    (0, common_1.Post)('messages/sync-statuses'),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], ChatController.prototype, "syncStatuses", null);
 __decorate([
     (0, common_1.Post)('group/create'),
     (0, common_1.HttpCode)(common_1.HttpStatus.CREATED),

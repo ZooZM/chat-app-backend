@@ -8,7 +8,7 @@ class BaseRepository {
     }
     async create(createEntityData) {
         const entity = new this.model(createEntityData);
-        return entity.save();
+        return await entity.save();
     }
     async findOne(filterQuery, projection) {
         return this.model.findOne(filterQuery, projection).exec();

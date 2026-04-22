@@ -5,7 +5,7 @@ export abstract class BaseRepository<T extends Document> {
 
   async create(createEntityData: unknown): Promise<T> {
     const entity = new this.model(createEntityData);
-    return entity.save() as unknown as Promise<T>;
+    return await entity.save();
   }
 
   async findOne(

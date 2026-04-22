@@ -23,6 +23,7 @@ const livekit_server_sdk_1 = require("livekit-server-sdk");
 const chat_service_1 = require("./chat.service");
 const send_message_dto_1 = require("./dto/send-message.dto");
 const mark_read_dto_1 = require("./dto/mark-read.dto");
+const mark_delivered_dto_1 = require("./dto/mark-delivered.dto");
 const users_service_1 = require("../users/users.service");
 const request_call_dto_1 = require("./dto/request-call.dto");
 const accept_call_dto_1 = require("./dto/accept-call.dto");
@@ -103,9 +104,14 @@ let ChatGateway = ChatGateway_1 = class ChatGateway {
             return;
         try {
             console.log('🚀 Payload received from Flutter:', payload);
-            const savedMessage = await this.chatService.saveMessage(client.user.userId, payload);
-            client.emit('messageDelivered', { messageId: payload.messageId });
-            client.broadcast.to(payload.chatRoomId).emit('newMessage', savedMessage);
+            const { message, isNew } = await this.chatService.saveMessage(client.user.userId, payload);
+            client.emit('messageSent', { clientMessageId: payload.clientMessageId });
+            if (isNew) {
+                client.broadcast.to(payload.chatRoomId).emit('newMessage', message);
+            }
+            else {
+                console.log(`⚡ Duplicate suppressed for clientMessageId: ${payload.clientMessageId}`);
+            }
         }
         catch (e) {
             console.error('Send Message Error:', e.message);
@@ -121,18 +127,36 @@ let ChatGateway = ChatGateway_1 = class ChatGateway {
             isTyping: payload.isTyping,
         });
     }
+    async handleMarkDelivered(client, payload) {
+        if (!client.user)
+            return;
+        try {
+            console.log('🚀 Payload received from Flutter(markDelivered):', payload);
+            const idsToMark = payload.clientMessageIds ? payload.clientMessageIds : (payload.clientMessageId ? [payload.clientMessageId] : []);
+            if (idsToMark.length === 0)
+                return;
+            await this.chatService.markMessagesDelivered(client.user.userId, payload.chatRoomId, idsToMark);
+            client.broadcast.to(payload.chatRoomId).emit('messageDelivered', {
+                chatRoomId: payload.chatRoomId,
+                clientMessageIds: idsToMark,
+                deliveredTo: client.user.userId,
+            });
+        }
+        catch (e) {
+            console.error('🛡️ Mark Delivered Error:', e.message);
+        }
+    }
     async handleMarkRead(client, payload) {
         if (!client.user)
             return;
         try {
-            const idsToMark = payload.messageIds ? payload.messageIds : (payload.messageId ? [payload.messageId] : []);
-            console.log('🚀 Payload received from Flutter:', payload);
+            const idsToMark = payload.clientMessageIds ? payload.clientMessageIds : (payload.clientMessageId ? [payload.clientMessageId] : []);
             if (idsToMark.length === 0)
                 return;
             await this.chatService.markMessagesRead(client.user.userId, payload.chatRoomId, idsToMark);
-            client.broadcast.to(payload.chatRoomId).emit('messagesRead', {
+            client.broadcast.to(payload.chatRoomId).emit('messageRead', {
                 chatRoomId: payload.chatRoomId,
-                messageIds: idsToMark,
+                clientMessageIds: idsToMark,
                 readBy: client.user.userId,
             });
         }
@@ -270,6 +294,15 @@ __decorate([
     __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", void 0)
 ], ChatGateway.prototype, "handleTyping", null);
+__decorate([
+    (0, common_1.UsePipes)(new common_1.ValidationPipe({ transform: true, whitelist: true })),
+    (0, websockets_1.SubscribeMessage)('markDelivered'),
+    __param(0, (0, websockets_1.ConnectedSocket)()),
+    __param(1, (0, websockets_1.MessageBody)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, mark_delivered_dto_1.MarkDeliveredDto]),
+    __metadata("design:returntype", Promise)
+], ChatGateway.prototype, "handleMarkDelivered", null);
 __decorate([
     (0, common_1.UsePipes)(new common_1.ValidationPipe({ transform: true, whitelist: true })),
     (0, websockets_1.SubscribeMessage)('markRead'),

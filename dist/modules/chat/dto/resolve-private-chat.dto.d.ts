@@ -1,3 +1,3 @@
 export declare class ResolvePrivateChatDto {
-    phoneNumber: string;
+    userId: string;
 }

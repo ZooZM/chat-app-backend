@@ -18,7 +18,7 @@ import { ResolvePrivateChatDto } from './dto/resolve-private-chat.dto';
 @UseGuards(JwtAuthGuard)
 @Controller('chat')
 export class ChatController {
-  constructor(private readonly chatService: ChatService) {}
+  constructor(private readonly chatService: ChatService) { }
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Room & Message Queries
@@ -56,9 +56,15 @@ export class ChatController {
   async resolvePrivateChat(@Request() req: any, @Body() dto: ResolvePrivateChatDto) {
     const { roomId, room } = await this.chatService.resolvePrivateRoom(
       req.user.userId,
-      dto.phoneNumber,
+      dto.userId,
     );
     return { roomId, room };
+  }
+
+  @Post('messages/sync-statuses')
+  @HttpCode(HttpStatus.OK)
+  async syncStatuses(@Body() dto: { clientMessageIds: string[] }) {
+    return this.chatService.syncStatuses(dto.clientMessageIds);
   }
 
   // ─────────────────────────────────────────────────────────────────────────────

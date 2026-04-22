@@ -33,10 +33,10 @@ let ChatService = class ChatService {
         const participants = [new mongoose_1.Types.ObjectId(userA), new mongoose_1.Types.ObjectId(userB)];
         return this.chatRoomsRepository.create({ type: 'PRIVATE', participants });
     }
-    async resolvePrivateRoom(requesterId, targetPhoneNumber) {
-        const targetUser = await this.usersRepository.findByPhoneNumber(targetPhoneNumber);
+    async resolvePrivateRoom(requesterId, targetUserId) {
+        const targetUser = await this.usersRepository.findById(targetUserId);
         if (!targetUser) {
-            throw new common_1.NotFoundException(`User with phone number "${targetPhoneNumber}" is not registered.`);
+            throw new common_1.NotFoundException(`User with ID "${targetUserId}" is not registered.`);
         }
         const targetId = targetUser._id.toString();
         if (targetId === requesterId) {
@@ -53,13 +53,20 @@ let ChatService = class ChatService {
         const room = await this.chatRoomsRepository.findById(payload.chatRoomId);
         if (!room)
             throw new common_1.NotFoundException('Chat room not found');
+        if (payload.clientMessageId) {
+            const existing = await this.messagesRepository.findByClientMessageId(payload.clientMessageId);
+            if (existing) {
+                return { message: existing, isNew: false };
+            }
+        }
         const savedMessage = await this.messagesRepository.create({
             chatRoomId: new mongoose_1.Types.ObjectId(payload.chatRoomId),
             senderId: new mongoose_1.Types.ObjectId(senderId),
             content: payload.content,
+            clientMessageId: payload.clientMessageId,
         });
         await this.chatRoomsRepository.updateLastMessage(payload.chatRoomId, savedMessage._id.toString());
-        return savedMessage;
+        return { message: savedMessage, isNew: true };
     }
     async saveSystemMessage(roomId, content) {
         const message = await this.messagesRepository.create({
@@ -88,6 +95,19 @@ let ChatService = class ChatService {
             throw new common_1.ForbiddenException('Unauthorized to read messages in this room');
         }
         return this.messagesRepository.markRead(messageIds, userId);
+    }
+    async markMessagesDelivered(userId, roomId, messageIds) {
+        const room = await this.chatRoomsRepository.findOne({
+            _id: roomId,
+            participants: userId,
+        });
+        if (!room) {
+            throw new common_1.ForbiddenException('Unauthorized to mark messages as delivered in this room');
+        }
+        return this.messagesRepository.markDelivered(messageIds, userId);
+    }
+    async syncStatuses(clientMessageIds) {
+        return this.messagesRepository.fetchStatusesByClientIds(clientMessageIds);
     }
     async createGroup(creatorPhoneNumber, creatorId, dto) {
         const participantIds = await this.resolvePhoneNumbersToObjectIds([

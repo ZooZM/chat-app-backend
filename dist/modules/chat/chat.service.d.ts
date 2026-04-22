@@ -11,11 +11,14 @@ export declare class ChatService {
     private readonly usersRepository;
     constructor(chatRoomsRepository: ChatRoomsRepository, messagesRepository: MessagesRepository, usersRepository: UsersRepository);
     createPrivateRoom(userA: string, userB: string): Promise<ChatRoomDocument>;
-    resolvePrivateRoom(requesterId: string, targetPhoneNumber: string): Promise<{
+    resolvePrivateRoom(requesterId: string, targetUserId: string): Promise<{
         roomId: string;
         room: ChatRoomDocument;
     }>;
-    saveMessage(senderId: string, payload: SendMessageDto): Promise<MessageDocument>;
+    saveMessage(senderId: string, payload: SendMessageDto): Promise<{
+        message: MessageDocument;
+        isNew: boolean;
+    }>;
     private saveSystemMessage;
     getUserRooms(userId: string, limit?: number, cursor?: string): Promise<ChatRoomDocument[]>;
     getUserRoomsForSocket(userId: string): Promise<{
@@ -23,6 +26,11 @@ export declare class ChatService {
     }[]>;
     getRoomMessages(roomId: string, limit?: number, cursor?: string): Promise<MessageDocument[]>;
     markMessagesRead(userId: string, roomId: string, messageIds: string[]): Promise<void>;
+    markMessagesDelivered(userId: string, roomId: string, messageIds: string[]): Promise<void>;
+    syncStatuses(clientMessageIds: string[]): Promise<{
+        clientMessageId: string;
+        status: import("./schemas/message.schema").MessageStatus;
+    }[]>;
     createGroup(creatorPhoneNumber: string, creatorId: string, dto: CreateGroupDto): Promise<ChatRoomDocument>;
     addParticipants(requesterPhoneNumber: string, roomId: string, dto: AddParticipantsDto): Promise<ChatRoomDocument>;
     removeParticipant(requesterPhoneNumber: string, roomId: string, dto: RemoveParticipantDto): Promise<ChatRoomDocument>;

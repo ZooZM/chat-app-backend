@@ -1,7 +1,7 @@
 export declare class SendMessageDto {
     chatRoomId: string;
     content: string;
-    messageId: string;
+    clientMessageId: string;
     messageIds?: string[];
     type: string;
 }

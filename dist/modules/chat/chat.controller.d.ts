@@ -10,6 +10,12 @@ export declare class ChatController {
         roomId: string;
         room: import("./schemas/chat-room.schema").ChatRoomDocument;
     }>;
+    syncStatuses(dto: {
+        clientMessageIds: string[];
+    }): Promise<{
+        clientMessageId: string;
+        status: import("./schemas/message.schema").MessageStatus;
+    }[]>;
     createGroup(req: any, dto: CreateGroupDto): Promise<{
         message: string;
         data: import("./schemas/chat-room.schema").ChatRoomDocument;

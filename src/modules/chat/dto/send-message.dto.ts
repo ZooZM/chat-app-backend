@@ -11,7 +11,7 @@ export class SendMessageDto {
 
   @IsNotEmpty()
   @IsString()
-  messageId: string;
+  clientMessageId: string;
 
   @IsOptional()
   @IsArray()

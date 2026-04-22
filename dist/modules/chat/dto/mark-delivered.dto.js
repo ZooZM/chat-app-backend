@@ -9,15 +9,28 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ResolvePrivateChatDto = void 0;
+exports.MarkDeliveredDto = void 0;
 const class_validator_1 = require("class-validator");
-class ResolvePrivateChatDto {
-    userId;
+class MarkDeliveredDto {
+    chatRoomId;
+    clientMessageId;
+    clientMessageIds;
 }
-exports.ResolvePrivateChatDto = ResolvePrivateChatDto;
+exports.MarkDeliveredDto = MarkDeliveredDto;
 __decorate([
-    (0, class_validator_1.IsString)(),
     (0, class_validator_1.IsNotEmpty)(),
+    (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
-], ResolvePrivateChatDto.prototype, "userId", void 0);
-//# sourceMappingURL=resolve-private-chat.dto.js.map
+], MarkDeliveredDto.prototype, "chatRoomId", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], MarkDeliveredDto.prototype, "clientMessageId", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsArray)(),
+    (0, class_validator_1.IsString)({ each: true }),
+    __metadata("design:type", Array)
+], MarkDeliveredDto.prototype, "clientMessageIds", void 0);
+//# sourceMappingURL=mark-delivered.dto.js.map

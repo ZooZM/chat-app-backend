@@ -1,6 +1,6 @@
 import { IsString, IsNotEmpty, IsArray, IsOptional } from 'class-validator';
 
-export class MarkReadDto {
+export class MarkDeliveredDto {
     @IsNotEmpty()
     @IsString()
     chatRoomId: string;

@@ -36,8 +36,27 @@ let MessagesRepository = class MessagesRepository extends base_repository_1.Base
             .populate('senderId', 'name phoneNumber')
             .exec();
     }
+    async markDelivered(messageIds, phoneNumber) {
+        await this.messageModel.updateMany({ clientMessageId: { $in: messageIds } }, {
+            $addToSet: { deliveredTo: phoneNumber },
+            $set: { status: message_schema_1.MessageStatus.DELIVERED },
+        }).exec();
+    }
     async markRead(messageIds, phoneNumber) {
-        await this.messageModel.updateMany({ _id: { $in: messageIds.map((id) => new mongoose_2.Types.ObjectId(id)) } }, { $addToSet: { readBy: phoneNumber } }).exec();
+        await this.messageModel.updateMany({ clientMessageId: { $in: messageIds } }, {
+            $addToSet: { readBy: phoneNumber, deliveredTo: phoneNumber },
+            $set: { status: message_schema_1.MessageStatus.READ },
+        }).exec();
+    }
+    async findByClientMessageId(clientMessageId) {
+        return this.findOne({ clientMessageId });
+    }
+    async fetchStatusesByClientIds(clientMessageIds) {
+        return this.messageModel
+            .find({ clientMessageId: { $in: clientMessageIds } })
+            .select('clientMessageId status')
+            .lean()
+            .exec();
     }
 };
 exports.MessagesRepository = MessagesRepository;

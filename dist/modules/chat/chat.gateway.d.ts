@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { ChatService } from './chat.service';
 import { SendMessageDto } from './dto/send-message.dto';
 import { MarkReadDto } from './dto/mark-read.dto';
+import { MarkDeliveredDto } from './dto/mark-delivered.dto';
 import { UsersService } from '../users/users.service';
 import { RequestCallDto } from './dto/request-call.dto';
 import { AcceptCallDto } from './dto/accept-call.dto';
@@ -36,6 +37,7 @@ export declare class ChatGateway implements OnGatewayConnection, OnGatewayDiscon
         roomId: string;
         isTyping: boolean;
     }): void;
+    handleMarkDelivered(client: AuthenticatedSocket, payload: MarkDeliveredDto): Promise<void>;
     handleMarkRead(client: AuthenticatedSocket, payload: MarkReadDto): Promise<void>;
     handleRequestCall(client: AuthenticatedSocket, payload: RequestCallDto): Promise<void>;
     handleAcceptCall(client: AuthenticatedSocket, payload: AcceptCallDto): Promise<void>;
