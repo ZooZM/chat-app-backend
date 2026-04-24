@@ -92,8 +92,11 @@ export class ChatService {
     const savedMessage = await this.messagesRepository.create({
       chatRoomId: new Types.ObjectId(payload.chatRoomId),
       senderId: new Types.ObjectId(senderId),
-      content: payload.content,
+      content: payload.content ?? '',
       clientMessageId: payload.clientMessageId,
+      messageType: payload.type ?? MessageType.TEXT,
+      fileUrl: payload.fileUrl,
+      metadata: payload.metadata,
     });
 
     await this.chatRoomsRepository.updateLastMessage(

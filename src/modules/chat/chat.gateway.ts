@@ -146,7 +146,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       // Emit messageSent regardless of whether the message is new or a duplicate.
       // If isNew=false the client is retrying after a dropped ACK — it still
       // needs this confirmation to promote the message from pending → sent.
-      client.emit('messageSent', { clientMessageId: payload.clientMessageId });
+      client.emit('messageSent', { 
+        clientMessageId: payload.clientMessageId,
+        createdAt: (message as any).createdAt
+      });
 
       // ── Only broadcast on first delivery ─────────────────────────────────────
       // Suppress newMessage for duplicates so recipients never see the same
@@ -171,6 +174,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (!client.user) return;
     // Broadcast to everyone in the room EXCEPT the sender
     client.to(payload.roomId).emit('userTyping', {
+      chatRoomId: payload.roomId,
       userId: client.user.userId,
       phoneNumber: client.user.phoneNumber,
       isTyping: payload.isTyping,

@@ -16,6 +16,12 @@ export declare class ChatController {
         clientMessageId: string;
         status: import("./schemas/message.schema").MessageStatus;
     }[]>;
+    uploadFile(file: Express.Multer.File): Promise<{
+        fileUrl: string;
+        fileName: string;
+        fileSize: number;
+        mimeType: string;
+    }>;
     createGroup(req: any, dto: CreateGroupDto): Promise<{
         message: string;
         data: import("./schemas/chat-room.schema").ChatRoomDocument;

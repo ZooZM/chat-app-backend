@@ -9,6 +9,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ChatModule = void 0;
 const common_1 = require("@nestjs/common");
 const mongoose_1 = require("@nestjs/mongoose");
+const platform_express_1 = require("@nestjs/platform-express");
 const auth_module_1 = require("../auth/auth.module");
 const users_module_1 = require("../users/users.module");
 const chat_room_schema_1 = require("./schemas/chat-room.schema");
@@ -29,6 +30,7 @@ exports.ChatModule = ChatModule = __decorate([
                 { name: chat_room_schema_1.ChatRoom.name, schema: chat_room_schema_1.ChatRoomSchema },
                 { name: message_schema_1.Message.name, schema: message_schema_1.MessageSchema },
             ]),
+            platform_express_1.MulterModule.register({ dest: './uploads' }),
             auth_module_1.AuthModule,
             users_module_1.UsersModule,
             jwt_1.JwtModule,

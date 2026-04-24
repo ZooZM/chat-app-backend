@@ -2,16 +2,35 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 
 export enum MessageType {
-  TEXT = 'TEXT',
-  IMAGE = 'IMAGE',
-  SYSTEM = 'SYSTEM', // e.g. "User X added User Y"
+  TEXT       = 'text',
+  IMAGE      = 'image',
+  FILE       = 'file',
+  CONTACT    = 'contact',
+  VOICE_NOTE = 'voice_note',
+  SYSTEM     = 'system',
 }
 
 export enum MessageStatus {
-  PENDING = 'pending',
-  SENT = 'sent',
+  PENDING   = 'pending',
+  SENT      = 'sent',
   DELIVERED = 'delivered',
-  READ = 'read',
+  READ      = 'read',
+}
+
+/**
+ * Flexible metadata bag stored as a sub-document.
+ *   Images / Files:  { fileName, fileSize, mimeType }
+ *   Contacts:        { contactName, contactPhone, contactEmail? }
+ *   Voice notes:     { duration } (seconds)
+ */
+export class MessageMetadata {
+  fileName?:     string;
+  fileSize?:     number;
+  mimeType?:     string;
+  duration?:     number;
+  contactName?:  string;
+  contactPhone?: string;
+  contactEmail?: string;
 }
 
 export type MessageDocument = Message & Document;
@@ -24,28 +43,34 @@ export class Message {
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   senderId: Types.ObjectId;
 
-  @Prop({ type: String, required: true })
+  /** Text body. Empty string is valid for pure file/image messages (no caption). */
+  @Prop({ type: String, default: '' })
   content: string;
 
   @Prop({ type: String, required: false })
   clientMessageId: string;
 
-  @Prop({ type: String, enum: MessageType, default: MessageType.TEXT })
+  @Prop({
+    type: String,
+    enum: Object.values(MessageType),
+    default: MessageType.TEXT,
+  })
   messageType: MessageType;
 
-  @Prop({ type: String, enum: MessageStatus, default: MessageStatus.SENT })
+  /** Relative URL returned by POST /chat/upload, e.g. /uploads/abc.jpg */
+  @Prop({ type: String, required: false })
+  fileUrl?: string;
+
+  /** Flexible metadata: fileName/fileSize for files, contactName/phone for contacts, etc. */
+  @Prop({ type: Object, required: false })
+  metadata?: MessageMetadata;
+
+  @Prop({ type: String, enum: Object.values(MessageStatus), default: MessageStatus.SENT })
   status: MessageStatus;
 
-  /**
-   * Phone numbers of participants who have received the message.
-   * Replaces the old simple `status` enum to support group delivery tracking.
-   */
   @Prop({ type: [String], default: [] })
   deliveredTo: string[];
 
-  /**
-   * Phone numbers of participants who have opened/read the message.
-   */
   @Prop({ type: [String], default: [] })
   readBy: string[];
 }

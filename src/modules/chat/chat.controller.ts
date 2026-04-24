@@ -9,7 +9,14 @@ import {
   Request,
   HttpCode,
   HttpStatus,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
+import { randomUUID } from 'crypto';
 import { ChatService } from './chat.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CreateGroupDto, AddParticipantsDto, RemoveParticipantDto } from './dto/group.dto';
@@ -65,6 +72,51 @@ export class ChatController {
   @HttpCode(HttpStatus.OK)
   async syncStatuses(@Body() dto: { clientMessageIds: string[] }) {
     return this.chatService.syncStatuses(dto.clientMessageIds);
+  }
+
+  /**
+   * POST /chat/upload
+   *
+   * Accepts a single file (image, audio, document) via multipart/form-data.
+   * The file is saved to /uploads on disk and served as a static asset.
+   *
+   * Flutter flow:
+   *   1. Call this endpoint FIRST to get a fileUrl.
+   *   2. Emit the sendMessage socket event with type + fileUrl + metadata.
+   *
+   * Returns: { fileUrl: '/uploads/<uuid>.<ext>', fileName, fileSize, mimeType }
+   */
+  @Post('upload')
+  @HttpCode(HttpStatus.CREATED)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: './uploads',
+        filename: (_req, file, cb) => {
+          const uniqueName = `${randomUUID()}${extname(file.originalname)}`;
+          cb(null, uniqueName);
+        },
+      }),
+      limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB hard cap
+      fileFilter: (_req, file, cb) => {
+        // Allow: images, audio, video, pdf, office docs, plain text
+        const allowed = /^(image|audio|video)\/.+$|application\/(pdf|msword|vnd\.openxmlformats|octet-stream)|text\/.+/;
+        if (allowed.test(file.mimetype)) {
+          cb(null, true);
+        } else {
+          cb(new BadRequestException(`Unsupported file type: ${file.mimetype}`), false);
+        }
+      },
+    }),
+  )
+  async uploadFile(@UploadedFile() file: Express.Multer.File) {
+    if (!file) throw new BadRequestException('No file provided');
+    return {
+      fileUrl:  `/uploads/${file.filename}`,
+      fileName: file.originalname,
+      fileSize: file.size,
+      mimeType: file.mimetype,
+    };
   }
 
   // ─────────────────────────────────────────────────────────────────────────────

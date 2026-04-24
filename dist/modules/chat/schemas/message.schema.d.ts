@@ -1,14 +1,26 @@
 import { Document, Types } from 'mongoose';
 export declare enum MessageType {
-    TEXT = "TEXT",
-    IMAGE = "IMAGE",
-    SYSTEM = "SYSTEM"
+    TEXT = "text",
+    IMAGE = "image",
+    FILE = "file",
+    CONTACT = "contact",
+    VOICE_NOTE = "voice_note",
+    SYSTEM = "system"
 }
 export declare enum MessageStatus {
     PENDING = "pending",
     SENT = "sent",
     DELIVERED = "delivered",
     READ = "read"
+}
+export declare class MessageMetadata {
+    fileName?: string;
+    fileSize?: number;
+    mimeType?: string;
+    duration?: number;
+    contactName?: string;
+    contactPhone?: string;
+    contactEmail?: string;
 }
 export type MessageDocument = Message & Document;
 export declare class Message {
@@ -17,6 +29,8 @@ export declare class Message {
     content: string;
     clientMessageId: string;
     messageType: MessageType;
+    fileUrl?: string;
+    metadata?: MessageMetadata;
     status: MessageStatus;
     deliveredTo: string[];
     readBy: string[];
@@ -67,6 +81,24 @@ export declare const MessageSchema: import("mongoose").Schema<Message, import("m
         id: string;
     }> | undefined;
     messageType?: import("mongoose").SchemaDefinitionProperty<MessageType, Message, Document<unknown, {}, Message, {
+        id: string;
+    }, import("mongoose").DefaultSchemaOptions> & Omit<Message & {
+        _id: Types.ObjectId;
+    } & {
+        __v: number;
+    }, "id"> & {
+        id: string;
+    }> | undefined;
+    fileUrl?: import("mongoose").SchemaDefinitionProperty<string | undefined, Message, Document<unknown, {}, Message, {
+        id: string;
+    }, import("mongoose").DefaultSchemaOptions> & Omit<Message & {
+        _id: Types.ObjectId;
+    } & {
+        __v: number;
+    }, "id"> & {
+        id: string;
+    }> | undefined;
+    metadata?: import("mongoose").SchemaDefinitionProperty<MessageMetadata | undefined, Message, Document<unknown, {}, Message, {
         id: string;
     }, import("mongoose").DefaultSchemaOptions> & Omit<Message & {
         _id: Types.ObjectId;

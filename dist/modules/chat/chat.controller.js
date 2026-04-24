@@ -14,6 +14,10 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ChatController = void 0;
 const common_1 = require("@nestjs/common");
+const platform_express_1 = require("@nestjs/platform-express");
+const multer_1 = require("multer");
+const path_1 = require("path");
+const crypto_1 = require("crypto");
 const chat_service_1 = require("./chat.service");
 const jwt_auth_guard_1 = require("../../common/guards/jwt-auth.guard");
 const group_dto_1 = require("./dto/group.dto");
@@ -37,6 +41,16 @@ let ChatController = class ChatController {
     }
     async syncStatuses(dto) {
         return this.chatService.syncStatuses(dto.clientMessageIds);
+    }
+    async uploadFile(file) {
+        if (!file)
+            throw new common_1.BadRequestException('No file provided');
+        return {
+            fileUrl: `/uploads/${file.filename}`,
+            fileName: file.originalname,
+            fileSize: file.size,
+            mimeType: file.mimetype,
+        };
     }
     async createGroup(req, dto) {
         const { userId, phoneNumber } = req.user;
@@ -103,6 +117,33 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], ChatController.prototype, "syncStatuses", null);
+__decorate([
+    (0, common_1.Post)('upload'),
+    (0, common_1.HttpCode)(common_1.HttpStatus.CREATED),
+    (0, common_1.UseInterceptors)((0, platform_express_1.FileInterceptor)('file', {
+        storage: (0, multer_1.diskStorage)({
+            destination: './uploads',
+            filename: (_req, file, cb) => {
+                const uniqueName = `${(0, crypto_1.randomUUID)()}${(0, path_1.extname)(file.originalname)}`;
+                cb(null, uniqueName);
+            },
+        }),
+        limits: { fileSize: 20 * 1024 * 1024 },
+        fileFilter: (_req, file, cb) => {
+            const allowed = /^(image|audio|video)\/.+$|application\/(pdf|msword|vnd\.openxmlformats|octet-stream)|text\/.+/;
+            if (allowed.test(file.mimetype)) {
+                cb(null, true);
+            }
+            else {
+                cb(new common_1.BadRequestException(`Unsupported file type: ${file.mimetype}`), false);
+            }
+        },
+    })),
+    __param(0, (0, common_1.UploadedFile)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], ChatController.prototype, "uploadFile", null);
 __decorate([
     (0, common_1.Post)('group/create'),
     (0, common_1.HttpCode)(common_1.HttpStatus.CREATED),

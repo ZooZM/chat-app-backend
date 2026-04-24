@@ -11,12 +11,14 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SendMessageDto = void 0;
 const class_validator_1 = require("class-validator");
+const message_schema_1 = require("../schemas/message.schema");
 class SendMessageDto {
     chatRoomId;
     content;
     clientMessageId;
-    messageIds;
     type;
+    fileUrl;
+    metadata;
 }
 exports.SendMessageDto = SendMessageDto;
 __decorate([
@@ -25,7 +27,7 @@ __decorate([
     __metadata("design:type", String)
 ], SendMessageDto.prototype, "chatRoomId", void 0);
 __decorate([
-    (0, class_validator_1.IsNotEmpty)(),
+    (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], SendMessageDto.prototype, "content", void 0);
@@ -36,13 +38,17 @@ __decorate([
 ], SendMessageDto.prototype, "clientMessageId", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsArray)(),
-    (0, class_validator_1.IsString)({ each: true }),
-    __metadata("design:type", Array)
-], SendMessageDto.prototype, "messageIds", void 0);
-__decorate([
-    (0, class_validator_1.IsNotEmpty)(),
-    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsEnum)(message_schema_1.MessageType),
     __metadata("design:type", String)
 ], SendMessageDto.prototype, "type", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], SendMessageDto.prototype, "fileUrl", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsObject)(),
+    __metadata("design:type", Object)
+], SendMessageDto.prototype, "metadata", void 0);
 //# sourceMappingURL=send-message.dto.js.map

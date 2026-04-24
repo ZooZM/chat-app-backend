@@ -9,14 +9,17 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.MessageSchema = exports.Message = exports.MessageStatus = exports.MessageType = void 0;
+exports.MessageSchema = exports.Message = exports.MessageMetadata = exports.MessageStatus = exports.MessageType = void 0;
 const mongoose_1 = require("@nestjs/mongoose");
 const mongoose_2 = require("mongoose");
 var MessageType;
 (function (MessageType) {
-    MessageType["TEXT"] = "TEXT";
-    MessageType["IMAGE"] = "IMAGE";
-    MessageType["SYSTEM"] = "SYSTEM";
+    MessageType["TEXT"] = "text";
+    MessageType["IMAGE"] = "image";
+    MessageType["FILE"] = "file";
+    MessageType["CONTACT"] = "contact";
+    MessageType["VOICE_NOTE"] = "voice_note";
+    MessageType["SYSTEM"] = "system";
 })(MessageType || (exports.MessageType = MessageType = {}));
 var MessageStatus;
 (function (MessageStatus) {
@@ -25,12 +28,24 @@ var MessageStatus;
     MessageStatus["DELIVERED"] = "delivered";
     MessageStatus["READ"] = "read";
 })(MessageStatus || (exports.MessageStatus = MessageStatus = {}));
+class MessageMetadata {
+    fileName;
+    fileSize;
+    mimeType;
+    duration;
+    contactName;
+    contactPhone;
+    contactEmail;
+}
+exports.MessageMetadata = MessageMetadata;
 let Message = class Message {
     chatRoomId;
     senderId;
     content;
     clientMessageId;
     messageType;
+    fileUrl;
+    metadata;
     status;
     deliveredTo;
     readBy;
@@ -45,7 +60,7 @@ __decorate([
     __metadata("design:type", mongoose_2.Types.ObjectId)
 ], Message.prototype, "senderId", void 0);
 __decorate([
-    (0, mongoose_1.Prop)({ type: String, required: true }),
+    (0, mongoose_1.Prop)({ type: String, default: '' }),
     __metadata("design:type", String)
 ], Message.prototype, "content", void 0);
 __decorate([
@@ -53,11 +68,23 @@ __decorate([
     __metadata("design:type", String)
 ], Message.prototype, "clientMessageId", void 0);
 __decorate([
-    (0, mongoose_1.Prop)({ type: String, enum: MessageType, default: MessageType.TEXT }),
+    (0, mongoose_1.Prop)({
+        type: String,
+        enum: Object.values(MessageType),
+        default: MessageType.TEXT,
+    }),
     __metadata("design:type", String)
 ], Message.prototype, "messageType", void 0);
 __decorate([
-    (0, mongoose_1.Prop)({ type: String, enum: MessageStatus, default: MessageStatus.SENT }),
+    (0, mongoose_1.Prop)({ type: String, required: false }),
+    __metadata("design:type", String)
+], Message.prototype, "fileUrl", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ type: Object, required: false }),
+    __metadata("design:type", MessageMetadata)
+], Message.prototype, "metadata", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ type: String, enum: Object.values(MessageStatus), default: MessageStatus.SENT }),
     __metadata("design:type", String)
 ], Message.prototype, "status", void 0);
 __decorate([

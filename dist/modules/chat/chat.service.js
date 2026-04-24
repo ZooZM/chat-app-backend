@@ -62,8 +62,11 @@ let ChatService = class ChatService {
         const savedMessage = await this.messagesRepository.create({
             chatRoomId: new mongoose_1.Types.ObjectId(payload.chatRoomId),
             senderId: new mongoose_1.Types.ObjectId(senderId),
-            content: payload.content,
+            content: payload.content ?? '',
             clientMessageId: payload.clientMessageId,
+            messageType: payload.type ?? message_schema_1.MessageType.TEXT,
+            fileUrl: payload.fileUrl,
+            metadata: payload.metadata,
         });
         await this.chatRoomsRepository.updateLastMessage(payload.chatRoomId, savedMessage._id.toString());
         return { message: savedMessage, isNew: true };

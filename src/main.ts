@@ -1,13 +1,22 @@
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import helmet from 'helmet';
+import { join } from 'path';
+import { mkdirSync } from 'fs';
 import { GlobalResponseInterceptor } from './common/interceptors/global-response.interceptor';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { RedisIoAdapter } from './common/adapters/redis-io.adapter';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // Ensure the uploads directory exists before accepting requests.
+  mkdirSync(join(process.cwd(), 'uploads'), { recursive: true });
+
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // Serve /uploads as a static folder so Flutter can fetch media via GET /uploads/<file>.
+  app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads' });
 
   // Configure WebSocket Redis Adapter
   const redisIoAdapter = new RedisIoAdapter(app);

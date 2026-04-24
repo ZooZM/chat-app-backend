@@ -1,3 +1,4 @@
 node_modules
 .env
 chat-app.postman_collection.json
+uploads

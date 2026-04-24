@@ -16,14 +16,14 @@ export class AuthService {
     private jwtService: JwtService,
     private configService: ConfigService,
     @Inject('REDIS_CLIENT') private redisClient: Redis,
-  ) {}
+  ) { }
 
   async sendOtp(sendOtpDto: SendOtpDto): Promise<{ message: string }> {
     const { phoneNumber } = sendOtpDto;
-    
+
     // Generate a 6-digit OTP (for testing, we'll use a fixed logic or random, random here)
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    
+
     // Save to Redis with 3-minute expiration (180 seconds)
     await this.redisClient.set(phoneNumber, otp, 'EX', 180);
 
@@ -44,8 +44,8 @@ export class AuthService {
     // Check if user exists, if not create
     let user = await this.usersService.findByPhoneNumber(phoneNumber);
     if (!user) {
-      user = await this.usersService.create({ 
-        phoneNumber, 
+      user = await this.usersService.create({
+        phoneNumber,
         name: 'New User', // Default name until they update their profile
         isPhoneVerified: true
       });
@@ -111,7 +111,7 @@ export class AuthService {
 
   private async generateAuthResponse(user: any) {
     const payload = { sub: user._id.toString(), phoneNumber: user.phoneNumber, name: user.name };
-    
+
     const accessTokenExpiresIn = this.configService.get<string>('JWT_ACCESS_EXPIRES_IN') || '15m';
     const refreshTokenExpiresIn = this.configService.get<string>('JWT_REFRESH_EXPIRES_IN') || '7d';
 

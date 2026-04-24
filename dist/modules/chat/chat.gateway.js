@@ -105,7 +105,10 @@ let ChatGateway = ChatGateway_1 = class ChatGateway {
         try {
             console.log('🚀 Payload received from Flutter:', payload);
             const { message, isNew } = await this.chatService.saveMessage(client.user.userId, payload);
-            client.emit('messageSent', { clientMessageId: payload.clientMessageId });
+            client.emit('messageSent', {
+                clientMessageId: payload.clientMessageId,
+                createdAt: message.createdAt
+            });
             if (isNew) {
                 client.broadcast.to(payload.chatRoomId).emit('newMessage', message);
             }
@@ -122,6 +125,7 @@ let ChatGateway = ChatGateway_1 = class ChatGateway {
         if (!client.user)
             return;
         client.to(payload.roomId).emit('userTyping', {
+            chatRoomId: payload.roomId,
             userId: client.user.userId,
             phoneNumber: client.user.phoneNumber,
             isTyping: payload.isTyping,

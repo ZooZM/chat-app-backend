@@ -1,24 +1,50 @@
-import { IsString, IsNotEmpty, IsMongoId, IsOptional, IsArray } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsMongoId,
+  IsOptional,
+  IsEnum,
+  IsObject,
+  IsUrl,
+} from 'class-validator';
+import { MessageType } from '../schemas/message.schema';
 
 export class SendMessageDto {
   @IsNotEmpty()
   @IsMongoId()
   chatRoomId: string;
 
-  @IsNotEmpty()
+  /**
+   * Text body. Optional for file/image/voice messages where content can be
+   * an empty string or a caption. Required only for text type.
+   */
+  @IsOptional()
   @IsString()
-  content: string;
+  content?: string;
 
   @IsNotEmpty()
   @IsString()
   clientMessageId: string;
 
   @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  messageIds?: string[];
+  @IsEnum(MessageType)
+  type?: MessageType;
 
-  @IsNotEmpty()
+  /**
+   * Relative URL returned by POST /chat/upload.
+   * Must be present for image, file, and voice_note types.
+   */
+  @IsOptional()
   @IsString()
-  type: string;
+  fileUrl?: string;
+
+  /**
+   * Flexible metadata bag:
+   *   { fileName, fileSize, mimeType }  for image/file
+   *   { contactName, contactPhone }     for contact
+   *   { duration }                      for voice_note
+   */
+  @IsOptional()
+  @IsObject()
+  metadata?: Record<string, unknown>;
 }
