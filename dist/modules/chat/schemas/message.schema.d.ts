@@ -5,7 +5,11 @@ export declare enum MessageType {
     FILE = "file",
     CONTACT = "contact",
     VOICE_NOTE = "voice_note",
-    SYSTEM = "system"
+    SYSTEM = "system",
+    LOCATION = "location",
+    AUDIO = "audio",
+    POLL = "poll",
+    EVENT = "event"
 }
 export declare enum MessageStatus {
     PENDING = "pending",
@@ -21,6 +25,15 @@ export declare class MessageMetadata {
     contactName?: string;
     contactPhone?: string;
     contactEmail?: string;
+    latitude?: number;
+    longitude?: number;
+    address?: string;
+    question?: string;
+    options?: string[];
+    votes?: Record<string, string[]>;
+    title?: string;
+    dateTime?: string;
+    description?: string;
 }
 export type MessageDocument = Message & Document;
 export declare class Message {

@@ -11,6 +11,7 @@ export declare class ChatRoom {
     name?: string;
     avatarUrl?: string;
     admins: string[];
+    description?: string;
 }
 export declare const ChatRoomSchema: import("mongoose").Schema<ChatRoom, import("mongoose").Model<ChatRoom, any, any, any, any, any, ChatRoom>, {}, {}, {}, {}, import("mongoose").DefaultSchemaOptions, ChatRoom, Document<unknown, {}, ChatRoom, {
     id: string;
@@ -67,6 +68,15 @@ export declare const ChatRoomSchema: import("mongoose").Schema<ChatRoom, import(
         id: string;
     }> | undefined;
     admins?: import("mongoose").SchemaDefinitionProperty<string[], ChatRoom, Document<unknown, {}, ChatRoom, {
+        id: string;
+    }, import("mongoose").DefaultSchemaOptions> & Omit<ChatRoom & {
+        _id: Types.ObjectId;
+    } & {
+        __v: number;
+    }, "id"> & {
+        id: string;
+    }> | undefined;
+    description?: import("mongoose").SchemaDefinitionProperty<string | undefined, ChatRoom, Document<unknown, {}, ChatRoom, {
         id: string;
     }, import("mongoose").DefaultSchemaOptions> & Omit<ChatRoom & {
         _id: Types.ObjectId;

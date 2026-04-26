@@ -24,6 +24,7 @@ let ChatRoom = class ChatRoom {
     name;
     avatarUrl;
     admins;
+    description;
 };
 exports.ChatRoom = ChatRoom;
 __decorate([
@@ -50,6 +51,10 @@ __decorate([
     (0, mongoose_1.Prop)({ type: [String], default: [] }),
     __metadata("design:type", Array)
 ], ChatRoom.prototype, "admins", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ type: String, required: false }),
+    __metadata("design:type", String)
+], ChatRoom.prototype, "description", void 0);
 exports.ChatRoom = ChatRoom = __decorate([
     (0, mongoose_1.Schema)({ timestamps: true })
 ], ChatRoom);

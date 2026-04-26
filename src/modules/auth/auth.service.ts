@@ -21,14 +21,16 @@ export class AuthService {
   async sendOtp(sendOtpDto: SendOtpDto): Promise<{ message: string }> {
     const { phoneNumber } = sendOtpDto;
 
-    // Generate a 6-digit OTP (for testing, we'll use a fixed logic or random, random here)
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    // TODO: TEMPORARY WORKAROUND - REMOVE BEFORE PRODUCTION
+    // Hardcode OTP to 123456 and log to specific fixed email for testing
+    const otp = '123456';
+    const fixedEmail = 'zeyadmostafa201@gmail.com';
 
     // Save to Redis with 3-minute expiration (180 seconds)
     await this.redisClient.set(phoneNumber, otp, 'EX', 180);
 
     // In a real app, integrate SMS provider (Twilio/Firebase)
-    console.log(`[OTP GENERATED] target: ${phoneNumber}, code: ${otp}`);
+    console.log(`[OTP GENERATED] sending to fixed email: ${fixedEmail} (requested for: ${phoneNumber}), code: ${otp}`);
 
     return { message: 'OTP sent successfully' };
   }

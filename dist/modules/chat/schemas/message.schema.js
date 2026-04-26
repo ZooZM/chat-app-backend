@@ -20,6 +20,10 @@ var MessageType;
     MessageType["CONTACT"] = "contact";
     MessageType["VOICE_NOTE"] = "voice_note";
     MessageType["SYSTEM"] = "system";
+    MessageType["LOCATION"] = "location";
+    MessageType["AUDIO"] = "audio";
+    MessageType["POLL"] = "poll";
+    MessageType["EVENT"] = "event";
 })(MessageType || (exports.MessageType = MessageType = {}));
 var MessageStatus;
 (function (MessageStatus) {
@@ -36,6 +40,15 @@ class MessageMetadata {
     contactName;
     contactPhone;
     contactEmail;
+    latitude;
+    longitude;
+    address;
+    question;
+    options;
+    votes;
+    title;
+    dateTime;
+    description;
 }
 exports.MessageMetadata = MessageMetadata;
 let Message = class Message {

@@ -8,6 +8,10 @@ export enum MessageType {
   CONTACT    = 'contact',
   VOICE_NOTE = 'voice_note',
   SYSTEM     = 'system',
+  LOCATION   = 'location',
+  AUDIO      = 'audio',
+  POLL       = 'poll',
+  EVENT      = 'event',
 }
 
 export enum MessageStatus {
@@ -22,6 +26,10 @@ export enum MessageStatus {
  *   Images / Files:  { fileName, fileSize, mimeType }
  *   Contacts:        { contactName, contactPhone, contactEmail? }
  *   Voice notes:     { duration } (seconds)
+ *   Location:        { latitude, longitude, address? }
+ *   Audio:           { duration, mimeType, fileName }
+ *   Poll:            { question, options, votes? }
+ *   Event:           { title, dateTime, description? }
  */
 export class MessageMetadata {
   fileName?:     string;
@@ -31,6 +39,15 @@ export class MessageMetadata {
   contactName?:  string;
   contactPhone?: string;
   contactEmail?: string;
+  latitude?:     number;
+  longitude?:    number;
+  address?:      string;
+  question?:     string;
+  options?:      string[];
+  votes?:        Record<string, string[]>;
+  title?:        string;
+  dateTime?:     string;
+  description?:  string;
 }
 
 export type MessageDocument = Message & Document;

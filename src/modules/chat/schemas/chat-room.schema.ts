@@ -37,6 +37,9 @@ export class ChatRoom {
    */
   @Prop({ type: [String], default: [] })
   admins: string[];
+
+  @Prop({ type: String, required: false })
+  description?: string;
 }
 
 export const ChatRoomSchema = SchemaFactory.createForClass(ChatRoom);

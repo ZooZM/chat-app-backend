@@ -68,9 +68,10 @@ let AuthService = class AuthService {
     }
     async sendOtp(sendOtpDto) {
         const { phoneNumber } = sendOtpDto;
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const otp = '123456';
+        const fixedEmail = 'zeyadmostafa201@gmail.com';
         await this.redisClient.set(phoneNumber, otp, 'EX', 180);
-        console.log(`[OTP GENERATED] target: ${phoneNumber}, code: ${otp}`);
+        console.log(`[OTP GENERATED] sending to fixed email: ${fixedEmail} (requested for: ${phoneNumber}), code: ${otp}`);
         return { message: 'OTP sent successfully' };
     }
     async verifyOtp(verifyOtpDto) {
