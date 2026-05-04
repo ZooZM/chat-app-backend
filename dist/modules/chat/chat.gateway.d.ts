@@ -43,5 +43,8 @@ export declare class ChatGateway implements OnGatewayConnection, OnGatewayDiscon
     handleAcceptCall(client: AuthenticatedSocket, payload: AcceptCallDto): Promise<void>;
     handleRejectCall(client: AuthenticatedSocket, payload: RejectCallDto): Promise<void>;
     handleEndCall(client: AuthenticatedSocket): Promise<void>;
+    handleDeleteForEveryone(client: AuthenticatedSocket, payload: {
+        clientMessageId: string;
+    }): Promise<void>;
 }
 export {};

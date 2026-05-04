@@ -60,4 +60,12 @@ export class MessagesRepository extends BaseRepository<MessageDocument> {
         .lean()
         .exec() as unknown as { clientMessageId: string; status: MessageStatus }[];
   }
+
+  /** FR-022: Soft-delete — sets isDeleted=true and clears content. */
+  async softDelete(clientMessageId: string): Promise<void> {
+    await this.messageModel.updateOne(
+      { clientMessageId },
+      { $set: { isDeleted: true, content: '' } },
+    ).exec();
+  }
 }

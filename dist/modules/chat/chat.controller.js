@@ -52,6 +52,15 @@ let ChatController = class ChatController {
             mimeType: file.mimetype,
         };
     }
+    async blockUser(req, targetId) {
+        return this.chatService.blockUser(req.user.userId, targetId);
+    }
+    async unblockUser(req, targetId) {
+        return this.chatService.unblockUser(req.user.userId, targetId);
+    }
+    async getBlockList(req) {
+        return this.chatService.getBlockList(req.user.userId);
+    }
     async createGroup(req, dto) {
         const { userId, phoneNumber } = req.user;
         const group = await this.chatService.createGroup(phoneNumber, userId, dto);
@@ -144,6 +153,31 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], ChatController.prototype, "uploadFile", null);
+__decorate([
+    (0, common_1.Post)('block/:targetId'),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Param)('targetId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", Promise)
+], ChatController.prototype, "blockUser", null);
+__decorate([
+    (0, common_1.Delete)('block/:targetId'),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Param)('targetId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", Promise)
+], ChatController.prototype, "unblockUser", null);
+__decorate([
+    (0, common_1.Get)('block-list'),
+    __param(0, (0, common_1.Request)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], ChatController.prototype, "getBlockList", null);
 __decorate([
     (0, common_1.Post)('group/create'),
     (0, common_1.HttpCode)(common_1.HttpStatus.CREATED),

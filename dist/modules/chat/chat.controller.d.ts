@@ -22,6 +22,13 @@ export declare class ChatController {
         fileSize: number;
         mimeType: string;
     }>;
+    blockUser(req: any, targetId: string): Promise<{
+        message: string;
+    }>;
+    unblockUser(req: any, targetId: string): Promise<{
+        message: string;
+    }>;
+    getBlockList(req: any): Promise<import("mongoose").Types.ObjectId[]>;
     createGroup(req: any, dto: CreateGroupDto): Promise<{
         message: string;
         data: import("./schemas/chat-room.schema").ChatRoomDocument;

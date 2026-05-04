@@ -86,6 +86,9 @@ let ChatService = class ChatService {
     async getUserRoomsForSocket(userId) {
         return this.chatRoomsRepository.getUserRoomIds(userId);
     }
+    async getRoomById(roomId) {
+        return this.chatRoomsRepository.findById(roomId);
+    }
     async getRoomMessages(roomId, limit = 50, cursor) {
         return this.messagesRepository.getRoomMessages(roomId, limit, cursor);
     }
@@ -180,6 +183,33 @@ let ChatService = class ChatService {
         }
         return { message: 'You have left the group.' };
     }
+    async blockUser(userId, targetId) {
+        if (userId === targetId) {
+            throw new common_1.BadRequestException('You cannot block yourself');
+        }
+        const targetUser = await this.usersRepository.findById(targetId);
+        if (!targetUser) {
+            throw new common_1.NotFoundException('Target user not found');
+        }
+        await this.usersRepository.findOneAndUpdate({ _id: new mongoose_1.Types.ObjectId(userId) }, { $addToSet: { blockedUsers: new mongoose_1.Types.ObjectId(targetId) } });
+        return { message: 'User blocked successfully' };
+    }
+    async unblockUser(userId, targetId) {
+        await this.usersRepository.findOneAndUpdate({ _id: new mongoose_1.Types.ObjectId(userId) }, { $pull: { blockedUsers: new mongoose_1.Types.ObjectId(targetId) } });
+        return { message: 'User unblocked successfully' };
+    }
+    async getBlockList(userId) {
+        const user = await this.usersRepository.findById(userId);
+        if (!user)
+            throw new common_1.NotFoundException('User not found');
+        return user.blockedUsers || [];
+    }
+    async isBlocked(senderId, recipientId) {
+        const recipient = await this.usersRepository.findById(recipientId);
+        if (!recipient || !recipient.blockedUsers)
+            return false;
+        return recipient.blockedUsers.some(id => id.toString() === senderId);
+    }
     async findGroupOrFail(roomId) {
         const room = await this.chatRoomsRepository.findById(roomId);
         if (!room)
@@ -203,6 +233,12 @@ let ChatService = class ChatService {
             objectIds.push(user._id);
         }
         return objectIds;
+    }
+    async getMessageByClientId(clientMessageId) {
+        return this.messagesRepository.findByClientMessageId(clientMessageId);
+    }
+    async softDeleteMessage(clientMessageId) {
+        await this.messagesRepository.softDelete(clientMessageId);
     }
 };
 exports.ChatService = ChatService;

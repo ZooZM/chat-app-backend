@@ -63,6 +63,12 @@ let ChatGateway = ChatGateway_1 = class ChatGateway {
             }
             this.logger.log(`[WS CONNECTED] User: ${client.user.userId} | Socket: ${client.id} | Auto-joined ${roomIds.length} room(s)`);
             await this.usersService.updateOnlineStatus(client.user.userId, true);
+            for (const room of userRooms) {
+                this.server.to(room._id.toString()).emit('userStatus', {
+                    userId: client.user.userId,
+                    isOnline: true,
+                });
+            }
             this.activeSockets.set(client.user.userId, client);
             client.emit('connected', {
                 userId: client.user.userId,
@@ -79,15 +85,22 @@ let ChatGateway = ChatGateway_1 = class ChatGateway {
             if (this.activeSockets.get(client.user.userId)?.id === client.id) {
                 this.activeSockets.delete(client.user.userId);
                 await this.usersService.updateOnlineStatus(client.user.userId, false);
-            }
-            const partnerId = this.activeCalls.get(client.user.userId);
-            if (partnerId) {
-                const partnerSocket = this.activeSockets.get(partnerId);
-                if (partnerSocket) {
-                    partnerSocket.emit('callEnded', { reason: 'peer_disconnected' });
+                const userRooms = await this.chatService.getUserRoomsForSocket(client.user.userId);
+                for (const room of userRooms) {
+                    this.server.to(room._id.toString()).emit('userStatus', {
+                        userId: client.user.userId,
+                        isOnline: false,
+                    });
                 }
-                this.activeCalls.delete(client.user.userId);
-                this.activeCalls.delete(partnerId);
+                const partnerId = this.activeCalls.get(client.user.userId);
+                if (partnerId) {
+                    const partnerSocket = this.activeSockets.get(partnerId);
+                    if (partnerSocket) {
+                        partnerSocket.emit('callEnded', { reason: 'peer_disconnected' });
+                    }
+                    this.activeCalls.delete(client.user.userId);
+                    this.activeCalls.delete(partnerId);
+                }
             }
         }
         this.logger.log(`[WS DISCONNECTED] Socket: ${client.id} | User: ${client.user?.userId ?? 'unauthenticated'}`);
@@ -102,15 +115,30 @@ let ChatGateway = ChatGateway_1 = class ChatGateway {
     async handleSendMessage(client, payload) {
         if (!client.user)
             return;
+        const user = client.user;
         try {
             console.log('🚀 Payload received from Flutter:', payload);
-            const { message, isNew } = await this.chatService.saveMessage(client.user.userId, payload);
+            const { message, isNew } = await this.chatService.saveMessage(user.userId, payload);
             client.emit('messageSent', {
                 clientMessageId: payload.clientMessageId,
                 createdAt: message.createdAt
             });
             if (isNew) {
-                client.broadcast.to(payload.chatRoomId).emit('newMessage', message);
+                let shouldDeliver = true;
+                const room = await this.chatService.getRoomById(payload.chatRoomId);
+                if (room && room.type === 'PRIVATE') {
+                    const otherParticipant = room.participants.find((p) => p.toString() !== user.userId);
+                    if (otherParticipant) {
+                        const isBlocked = await this.chatService.isBlocked(user.userId, otherParticipant.toString());
+                        if (isBlocked) {
+                            shouldDeliver = false;
+                            this.logger.log(`[Block Guard] Message from ${user.userId} dropped: Blocked by ${otherParticipant}`);
+                        }
+                    }
+                }
+                if (shouldDeliver) {
+                    client.broadcast.to(payload.chatRoomId).emit('newMessage', message);
+                }
             }
             else {
                 console.log(`⚡ Duplicate suppressed for clientMessageId: ${payload.clientMessageId}`);
@@ -267,6 +295,42 @@ let ChatGateway = ChatGateway_1 = class ChatGateway {
             this.logger.log(`[Call] Call ended between ${userId} and ${partnerId}`);
         }
     }
+    async handleDeleteForEveryone(client, payload) {
+        if (!client.user)
+            return;
+        const { clientMessageId } = payload;
+        if (!clientMessageId)
+            return;
+        try {
+            const message = await this.chatService.getMessageByClientId(clientMessageId);
+            if (!message) {
+                this.logger.warn(`[DELETE] Message not found: ${clientMessageId}`);
+                return;
+            }
+            if (message.senderId.toString() !== client.user.userId) {
+                client.emit('error', { message: 'Cannot delete: not the sender' });
+                return;
+            }
+            const createdAt = message.createdAt;
+            const ageMs = Date.now() - new Date(createdAt).getTime();
+            const ONE_HOUR_MS = 60 * 60 * 1000;
+            if (ageMs > ONE_HOUR_MS) {
+                client.emit('error', { message: 'Cannot delete: message older than 1 hour' });
+                return;
+            }
+            await this.chatService.softDeleteMessage(clientMessageId);
+            const roomId = message.chatRoomId.toString();
+            this.server.to(roomId).emit('messageDeleted', {
+                clientMessageId,
+                roomId,
+                deletedBy: client.user.userId,
+            });
+            this.logger.log(`[DELETE] ${client.user.userId} deleted message ${clientMessageId}`);
+        }
+        catch (e) {
+            this.logger.error(`[DELETE] deleteForEveryone error: ${e.message}`);
+        }
+    }
 };
 exports.ChatGateway = ChatGateway;
 __decorate([
@@ -350,6 +414,14 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], ChatGateway.prototype, "handleEndCall", null);
+__decorate([
+    (0, websockets_1.SubscribeMessage)('deleteForEveryone'),
+    __param(0, (0, websockets_1.ConnectedSocket)()),
+    __param(1, (0, websockets_1.MessageBody)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", Promise)
+], ChatGateway.prototype, "handleDeleteForEveryone", null);
 exports.ChatGateway = ChatGateway = ChatGateway_1 = __decorate([
     (0, websockets_1.WebSocketGateway)({
         cors: { origin: '*' },

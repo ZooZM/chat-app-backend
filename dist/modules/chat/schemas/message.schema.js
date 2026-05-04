@@ -24,6 +24,7 @@ var MessageType;
     MessageType["AUDIO"] = "audio";
     MessageType["POLL"] = "poll";
     MessageType["EVENT"] = "event";
+    MessageType["VIDEO"] = "video";
 })(MessageType || (exports.MessageType = MessageType = {}));
 var MessageStatus;
 (function (MessageStatus) {
@@ -49,6 +50,7 @@ class MessageMetadata {
     title;
     dateTime;
     description;
+    thumbnailUrl;
 }
 exports.MessageMetadata = MessageMetadata;
 let Message = class Message {
@@ -62,6 +64,8 @@ let Message = class Message {
     status;
     deliveredTo;
     readBy;
+    isDeleted;
+    waveformSamples;
 };
 exports.Message = Message;
 __decorate([
@@ -108,6 +112,14 @@ __decorate([
     (0, mongoose_1.Prop)({ type: [String], default: [] }),
     __metadata("design:type", Array)
 ], Message.prototype, "readBy", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ type: Boolean, default: false }),
+    __metadata("design:type", Boolean)
+], Message.prototype, "isDeleted", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ type: [Number], default: [] }),
+    __metadata("design:type", Array)
+], Message.prototype, "waveformSamples", void 0);
 exports.Message = Message = __decorate([
     (0, mongoose_1.Schema)({ timestamps: true })
 ], Message);

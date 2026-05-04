@@ -127,6 +127,10 @@ export class ChatService {
     return this.chatRoomsRepository.getUserRoomIds(userId);
   }
 
+  async getRoomById(roomId: string): Promise<ChatRoomDocument | null> {
+    return this.chatRoomsRepository.findById(roomId);
+  }
+
   async getRoomMessages(roomId: string, limit = 50, cursor?: string) {
     return this.messagesRepository.getRoomMessages(roomId, limit, cursor);
   }
@@ -298,6 +302,51 @@ export class ChatService {
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
+  // Block Management
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  async blockUser(userId: string, targetId: string) {
+    if (userId === targetId) {
+      throw new BadRequestException('You cannot block yourself');
+    }
+    
+    const targetUser = await this.usersRepository.findById(targetId);
+    if (!targetUser) {
+      throw new NotFoundException('Target user not found');
+    }
+
+    await this.usersRepository.findOneAndUpdate(
+      { _id: new Types.ObjectId(userId) },
+      { $addToSet: { blockedUsers: new Types.ObjectId(targetId) } }
+    );
+    return { message: 'User blocked successfully' };
+  }
+
+  async unblockUser(userId: string, targetId: string) {
+    await this.usersRepository.findOneAndUpdate(
+      { _id: new Types.ObjectId(userId) },
+      { $pull: { blockedUsers: new Types.ObjectId(targetId) } }
+    );
+    return { message: 'User unblocked successfully' };
+  }
+
+  async getBlockList(userId: string) {
+    const user = await this.usersRepository.findById(userId);
+    if (!user) throw new NotFoundException('User not found');
+    
+    // Assuming we just want to return the array of ObjectIds
+    return user.blockedUsers || [];
+  }
+
+  async isBlocked(senderId: string, recipientId: string): Promise<boolean> {
+    // Check if recipient has blocked sender
+    const recipient = await this.usersRepository.findById(recipientId);
+    if (!recipient || !recipient.blockedUsers) return false;
+    
+    return recipient.blockedUsers.some(id => id.toString() === senderId);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
   // Private Helpers
   // ─────────────────────────────────────────────────────────────────────────────
 
@@ -331,5 +380,17 @@ export class ChatService {
     }
 
     return objectIds;
+  }
+
+  // ── FR-022: Message Deletion ───────────────────────────────────────────────
+
+  /** Finds a message by its clientMessageId for ownership + time-limit checks. */
+  async getMessageByClientId(clientMessageId: string): Promise<MessageDocument | null> {
+    return this.messagesRepository.findByClientMessageId(clientMessageId);
+  }
+
+  /** Soft-deletes a message: sets isDeleted=true and clears content. */
+  async softDeleteMessage(clientMessageId: string): Promise<void> {
+    await this.messagesRepository.softDelete(clientMessageId);
   }
 }

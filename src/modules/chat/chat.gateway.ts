@@ -77,7 +77,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       // --- 3. Set user online in DB ---
       await this.usersService.updateOnlineStatus(client.user.userId, true);
+      for (const room of userRooms) {
+        this.server.to(room._id.toString()).emit('userStatus', {
+          userId: client.user.userId,
+          isOnline: true,
+        });
+      }
 
+      // --- 4. Track active socket ---
       // Track active socket
       this.activeSockets.set(client.user.userId, client);
 
@@ -98,17 +105,26 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         this.activeSockets.delete(client.user.userId);
         // --- Set user offline in DB ---
         await this.usersService.updateOnlineStatus(client.user.userId, false);
-      }
+        const userRooms = await this.chatService.getUserRoomsForSocket(client.user.userId);
 
-      // --- Terminate active call if disconnected during one ---
-      const partnerId = this.activeCalls.get(client.user.userId);
-      if (partnerId) {
-        const partnerSocket = this.activeSockets.get(partnerId);
-        if (partnerSocket) {
-          partnerSocket.emit('callEnded', { reason: 'peer_disconnected' });
+        for (const room of userRooms) {
+          this.server.to(room._id.toString()).emit('userStatus', {
+            userId: client.user.userId,
+            isOnline: false,
+          });
+
         }
-        this.activeCalls.delete(client.user.userId);
-        this.activeCalls.delete(partnerId);
+
+        // --- Terminate active call if disconnected during one ---
+        const partnerId = this.activeCalls.get(client.user.userId);
+        if (partnerId) {
+          const partnerSocket = this.activeSockets.get(partnerId);
+          if (partnerSocket) {
+            partnerSocket.emit('callEnded', { reason: 'peer_disconnected' });
+          }
+          this.activeCalls.delete(client.user.userId);
+          this.activeCalls.delete(partnerId);
+        }
       }
     }
     this.logger.log(`[WS DISCONNECTED] Socket: ${client.id} | User: ${client.user?.userId ?? 'unauthenticated'}`);
@@ -136,17 +152,19 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody() payload: SendMessageDto,
   ) {
     if (!client.user) return;
+    // Capture into a local const so TypeScript's narrowing persists inside closures.
+    const user = client.user;
 
     try {
       console.log('🚀 Payload received from Flutter:', payload);
 
-      const { message, isNew } = await this.chatService.saveMessage(client.user.userId, payload);
+      const { message, isNew } = await this.chatService.saveMessage(user.userId, payload);
 
       // ── Always ACK the sender ────────────────────────────────────────────────
       // Emit messageSent regardless of whether the message is new or a duplicate.
       // If isNew=false the client is retrying after a dropped ACK — it still
       // needs this confirmation to promote the message from pending → sent.
-      client.emit('messageSent', { 
+      client.emit('messageSent', {
         clientMessageId: payload.clientMessageId,
         createdAt: (message as any).createdAt
       });
@@ -155,7 +173,26 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       // Suppress newMessage for duplicates so recipients never see the same
       // message twice (idempotency contract).
       if (isNew) {
-        client.broadcast.to(payload.chatRoomId).emit('newMessage', message);
+        let shouldDeliver = true;
+
+        // ── Block Guard ────────────────────────────────────────────────────────
+        const room = await this.chatService.getRoomById(payload.chatRoomId);
+        if (room && room.type === 'PRIVATE') {
+          const otherParticipant = (room.participants as any[]).find(
+            (p) => p.toString() !== user.userId,
+          );
+          if (otherParticipant) {
+            const isBlocked = await this.chatService.isBlocked(user.userId, otherParticipant.toString());
+            if (isBlocked) {
+              shouldDeliver = false;
+              this.logger.log(`[Block Guard] Message from ${user.userId} dropped: Blocked by ${otherParticipant}`);
+            }
+          }
+        }
+
+        if (shouldDeliver) {
+          client.broadcast.to(payload.chatRoomId).emit('newMessage', message);
+        }
       } else {
         console.log(`⚡ Duplicate suppressed for clientMessageId: ${payload.clientMessageId}`);
       }
@@ -380,6 +417,60 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.activeCalls.delete(partnerId);
 
       this.logger.log(`[Call] Call ended between ${userId} and ${partnerId}`);
+    }
+  }
+
+  /**
+   * FR-022: Delete a message for everyone in the room.
+   * Validates that the requester is the sender and the message is < 1 hour old.
+   * Sets isDeleted = true in MongoDB and broadcasts `messageDeleted` to all room sockets.
+   */
+  @SubscribeMessage('deleteForEveryone')
+  async handleDeleteForEveryone(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() payload: { clientMessageId: string },
+  ) {
+    if (!client.user) return;
+    const { clientMessageId } = payload;
+    if (!clientMessageId) return;
+
+    try {
+      const message = await this.chatService.getMessageByClientId(clientMessageId);
+
+      if (!message) {
+        this.logger.warn(`[DELETE] Message not found: ${clientMessageId}`);
+        return;
+      }
+
+      // Ownership check — only the original sender can delete for everyone.
+      if (message.senderId.toString() !== client.user.userId) {
+        client.emit('error', { message: 'Cannot delete: not the sender' });
+        return;
+      }
+
+      // Time-limit check — must be within 1 hour of creation.
+      const createdAt = (message as any).createdAt as Date;
+      const ageMs = Date.now() - new Date(createdAt).getTime();
+      const ONE_HOUR_MS = 60 * 60 * 1000;
+      if (ageMs > ONE_HOUR_MS) {
+        client.emit('error', { message: 'Cannot delete: message older than 1 hour' });
+        return;
+      }
+
+      // Persist soft-delete.
+      await this.chatService.softDeleteMessage(clientMessageId);
+
+      // Broadcast to ALL room members (including sender for multi-device sync).
+      const roomId = message.chatRoomId.toString();
+      this.server.to(roomId).emit('messageDeleted', {
+        clientMessageId,
+        roomId,
+        deletedBy: client.user.userId,
+      });
+
+      this.logger.log(`[DELETE] ${client.user.userId} deleted message ${clientMessageId}`);
+    } catch (e) {
+      this.logger.error(`[DELETE] deleteForEveryone error: ${e.message}`);
     }
   }
 }

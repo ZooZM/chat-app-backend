@@ -58,6 +58,9 @@ let MessagesRepository = class MessagesRepository extends base_repository_1.Base
             .lean()
             .exec();
     }
+    async softDelete(clientMessageId) {
+        await this.messageModel.updateOne({ clientMessageId }, { $set: { isDeleted: true, content: '' } }).exec();
+    }
 };
 exports.MessagesRepository = MessagesRepository;
 exports.MessagesRepository = MessagesRepository = __decorate([

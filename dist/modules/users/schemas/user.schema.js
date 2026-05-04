@@ -11,6 +11,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.UserSchema = exports.User = exports.Location = exports.Subscription = exports.SubscriptionStatus = exports.SubscriptionTier = void 0;
 const mongoose_1 = require("@nestjs/mongoose");
+const mongoose_2 = require("mongoose");
 var SubscriptionTier;
 (function (SubscriptionTier) {
     SubscriptionTier["FREE"] = "FREE";
@@ -81,6 +82,7 @@ let User = class User {
     isOnline;
     location;
     subscription;
+    blockedUsers;
 };
 exports.User = User;
 __decorate([
@@ -123,6 +125,10 @@ __decorate([
     (0, mongoose_1.Prop)({ type: Subscription, default: () => ({}) }),
     __metadata("design:type", Subscription)
 ], User.prototype, "subscription", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ type: [{ type: mongoose_2.Types.ObjectId, ref: 'User' }], default: [] }),
+    __metadata("design:type", Array)
+], User.prototype, "blockedUsers", void 0);
 exports.User = User = __decorate([
     (0, mongoose_1.Schema)({ timestamps: true })
 ], User);

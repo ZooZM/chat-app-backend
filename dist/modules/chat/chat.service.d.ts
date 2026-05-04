@@ -1,3 +1,4 @@
+import { Types } from 'mongoose';
 import { ChatRoomDocument } from './schemas/chat-room.schema';
 import { MessageDocument } from './schemas/message.schema';
 import { SendMessageDto } from './dto/send-message.dto';
@@ -24,6 +25,7 @@ export declare class ChatService {
     getUserRoomsForSocket(userId: string): Promise<{
         _id: any;
     }[]>;
+    getRoomById(roomId: string): Promise<ChatRoomDocument | null>;
     getRoomMessages(roomId: string, limit?: number, cursor?: string): Promise<MessageDocument[]>;
     markMessagesRead(userId: string, roomId: string, messageIds: string[]): Promise<void>;
     markMessagesDelivered(userId: string, roomId: string, messageIds: string[]): Promise<void>;
@@ -37,7 +39,17 @@ export declare class ChatService {
     leaveGroup(requesterPhoneNumber: string, requesterUserId: string, roomId: string): Promise<{
         message: string;
     }>;
+    blockUser(userId: string, targetId: string): Promise<{
+        message: string;
+    }>;
+    unblockUser(userId: string, targetId: string): Promise<{
+        message: string;
+    }>;
+    getBlockList(userId: string): Promise<Types.ObjectId[]>;
+    isBlocked(senderId: string, recipientId: string): Promise<boolean>;
     private findGroupOrFail;
     private assertIsAdmin;
     private resolvePhoneNumbersToObjectIds;
+    getMessageByClientId(clientMessageId: string): Promise<MessageDocument | null>;
+    softDeleteMessage(clientMessageId: string): Promise<void>;
 }
