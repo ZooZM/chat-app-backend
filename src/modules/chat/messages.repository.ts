@@ -60,4 +60,22 @@ export class MessagesRepository extends BaseRepository<MessageDocument> {
         .lean()
         .exec() as unknown as { clientMessageId: string; status: MessageStatus }[];
   }
+
+  async softDelete(
+    clientMessageId: string,
+    requesterId: string,
+    windowMinutes: number,
+  ): Promise<MessageDocument | null> {
+    const cutoff = new Date(Date.now() - windowMinutes * 60 * 1000);
+    return this.messageModel.findOneAndUpdate(
+      {
+        clientMessageId,
+        senderId: new Types.ObjectId(requesterId),
+        createdAt: { $gte: cutoff },
+        isDeleted: false,
+      },
+      { $set: { isDeleted: true, content: '' } },
+      { new: true },
+    ).exec();
+  }
 }

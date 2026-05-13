@@ -20,6 +20,8 @@ import { UsersService } from '../users/users.service';
 import { RequestCallDto } from './dto/request-call.dto';
 import { AcceptCallDto } from './dto/accept-call.dto';
 import { RejectCallDto } from './dto/reject-call.dto';
+import { MessagesRepository } from './messages.repository';
+import { CHAT_CONFIG } from './chat.config';
 
 interface AuthenticatedSocket extends Socket {
   user?: { userId: string; phoneNumber: string };
@@ -42,6 +44,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private chatService: ChatService,
     private usersService: UsersService,
     private configService: ConfigService,
+    private messagesRepository: MessagesRepository,
   ) { }
 
   async handleConnection(client: AuthenticatedSocket) {
@@ -237,6 +240,31 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     } catch (e) {
       console.error('🛡️ Mark Read Error:', e.message);
+    }
+  }
+
+  @SubscribeMessage('deleteForEveryone')
+  async handleDeleteForEveryone(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() payload: { clientMessageId: string; chatRoomId: string },
+  ) {
+    if (!client.user) return;
+
+    try {
+      const deleted = await this.messagesRepository.softDelete(
+        payload.clientMessageId,
+        client.user.userId,
+        CHAT_CONFIG.DELETE_WINDOW_MINUTES,
+      );
+
+      if (!deleted) return;
+
+      this.server.to(payload.chatRoomId).emit('messageDeleted', {
+        clientMessageId: payload.clientMessageId,
+        chatRoomId: payload.chatRoomId,
+      });
+    } catch (e) {
+      console.error('🛡️ Delete For Everyone Error:', e.message);
     }
   }
 
