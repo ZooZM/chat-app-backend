@@ -11,6 +11,7 @@ import { ChatController } from './chat.controller';
 import { JwtModule } from '@nestjs/jwt';
 import { ChatRoomsRepository } from './chat-rooms.repository';
 import { MessagesRepository } from './messages.repository';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { MessagesRepository } from './messages.repository';
     AuthModule,
     UsersModule,
     JwtModule,
+    NotificationsModule,
   ],
   providers: [ChatService, ChatGateway, ChatRoomsRepository, MessagesRepository],
   exports: [ChatService, ChatRoomsRepository, MessagesRepository],

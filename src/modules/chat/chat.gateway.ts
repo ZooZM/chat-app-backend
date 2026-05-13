@@ -22,6 +22,8 @@ import { AcceptCallDto } from './dto/accept-call.dto';
 import { RejectCallDto } from './dto/reject-call.dto';
 import { MessagesRepository } from './messages.repository';
 import { CHAT_CONFIG } from './chat.config';
+import { PushService } from '../notifications/push.service';
+import { ChatRoomsRepository } from './chat-rooms.repository';
 
 interface AuthenticatedSocket extends Socket {
   user?: { userId: string; phoneNumber: string };
@@ -45,6 +47,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private usersService: UsersService,
     private configService: ConfigService,
     private messagesRepository: MessagesRepository,
+    private pushService: PushService,
+    private chatRoomsRepository: ChatRoomsRepository,
   ) { }
 
   async handleConnection(client: AuthenticatedSocket) {
@@ -159,6 +163,21 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       // message twice (idempotency contract).
       if (isNew) {
         client.broadcast.to(payload.chatRoomId).emit('newMessage', message);
+
+        // Notify participants who are not currently connected via push.
+        const room = await this.chatRoomsRepository.findById(payload.chatRoomId);
+        if (room) {
+          for (const participantId of room.participants as any[]) {
+            const id = participantId.toString();
+            if (id !== client.user.userId && !this.activeSockets.has(id)) {
+              this.pushService.notifyOfflineUser(id, {
+                content: (message as any).content ?? '',
+                senderName: client.user.phoneNumber,
+                roomId: payload.chatRoomId,
+              }).catch(() => {});
+            }
+          }
+        }
       } else {
         console.log(`⚡ Duplicate suppressed for clientMessageId: ${payload.clientMessageId}`);
       }
