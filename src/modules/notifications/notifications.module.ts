@@ -9,6 +9,6 @@ import { PushService } from './push.service';
     MongooseModule.forFeature([{ name: DeviceToken.name, schema: DeviceTokenSchema }]),
   ],
   providers: [DeviceTokensRepository, PushService],
-  exports: [PushService],
+  exports: [PushService, DeviceTokensRepository],
 })
 export class NotificationsModule {}
