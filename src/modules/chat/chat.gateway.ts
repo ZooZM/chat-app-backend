@@ -144,17 +144,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         if (partnerSocket) {
           partnerSocket.emit('callEnded', { reason: 'peer_disconnected' });
         }
-
-        // --- Terminate active call if disconnected during one ---
-        const partnerId = this.activeCalls.get(client.user.userId);
-        if (partnerId) {
-          const partnerSocket = this.activeSockets.get(partnerId);
-          if (partnerSocket) {
-            partnerSocket.emit('callEnded', { reason: 'peer_disconnected' });
-          }
-          this.activeCalls.delete(client.user.userId);
-          this.activeCalls.delete(partnerId);
-        }
+        this.activeCalls.delete(client.user.userId);
+        this.activeCalls.delete(partnerId);
       }
 
       // --- FR-026: Clean up group calls on disconnect ---
