@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import { SendOtpDto } from './dto/send-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ConfigService } from '@nestjs/config';
@@ -84,6 +85,26 @@ export class AuthService {
       password,
       isPhoneVerified: false,
     });
+
+    return this.generateAuthResponse(user);
+  }
+
+  async refreshTokens(refreshTokenDto: RefreshTokenDto) {
+    const { refreshToken } = refreshTokenDto;
+
+    let payload: { sub: string; phoneNumber: string };
+    try {
+      payload = await this.jwtService.verifyAsync(refreshToken, {
+        secret: this.configService.get<string>('JWT_SECRET') || 'default-secret',
+      });
+    } catch {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+
+    const user = await this.usersService.findById(payload.sub);
+    if (!user || user.refreshToken !== refreshToken) {
+      throw new UnauthorizedException('Refresh token revoked');
+    }
 
     return this.generateAuthResponse(user);
   }

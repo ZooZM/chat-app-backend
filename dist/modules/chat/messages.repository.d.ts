@@ -12,4 +12,5 @@ export declare class MessagesRepository extends BaseRepository<MessageDocument> 
         clientMessageId: string;
         status: MessageStatus;
     }[]>;
+    softDelete(clientMessageId: string, requesterId: string, windowMinutes: number): Promise<MessageDocument | null>;
 }

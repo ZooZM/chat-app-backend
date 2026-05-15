@@ -21,4 +21,8 @@ export class DeviceTokensRepository {
   async getTokens(userId: string): Promise<DeviceTokenDocument[]> {
     return this.model.find({ userId: new Types.ObjectId(userId) }).exec();
   }
+
+  async deleteAllTokensForUser(userId: string): Promise<void> {
+    await this.model.deleteMany({ userId: new Types.ObjectId(userId) }).exec();
+  }
 }

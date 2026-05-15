@@ -116,6 +116,23 @@ let AuthService = class AuthService {
         });
         return this.generateAuthResponse(user);
     }
+    async refreshTokens(refreshTokenDto) {
+        const { refreshToken } = refreshTokenDto;
+        let payload;
+        try {
+            payload = await this.jwtService.verifyAsync(refreshToken, {
+                secret: this.configService.get('JWT_SECRET') || 'default-secret',
+            });
+        }
+        catch {
+            throw new common_1.UnauthorizedException('Invalid or expired refresh token');
+        }
+        const user = await this.usersService.findById(payload.sub);
+        if (!user || user.refreshToken !== refreshToken) {
+            throw new common_1.UnauthorizedException('Refresh token revoked');
+        }
+        return this.generateAuthResponse(user);
+    }
     async login(loginDto) {
         const { phoneNumber, email, password } = loginDto;
         let user;

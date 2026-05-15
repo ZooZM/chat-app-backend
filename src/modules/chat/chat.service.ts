@@ -104,7 +104,13 @@ export class ChatService {
       savedMessage._id.toString(),
     );
 
-    return { message: savedMessage, isNew: true };
+    // Populate senderId with { _id, name, phoneNumber } so the live socket
+    // emit carries the sender's display name & phone — matches the shape of
+    // messages returned by REST fetches and lets the client render the
+    // group-bubble label without an extra round-trip.
+    const populated = await savedMessage.populate('senderId', 'name phoneNumber');
+
+    return { message: populated, isNew: true };
   }
 
   /** Saves a SYSTEM message (e.g. "User X created the group"). No sender. */
@@ -131,9 +137,14 @@ export class ChatService {
     return this.messagesRepository.getRoomMessages(roomId, limit, cursor);
   }
 
-  /** Appends the reader's phoneNumber to `readBy` on each message (idempotent via $addToSet). */
-  async markMessagesRead(userId: string, roomId: string, messageIds: string[]) {
-    // SECURITY CHECK: التأكد إن اليوزر مشارك فعلي في الغرفة
+  /** Appends the reader's userId to `readBy` on each message (idempotent via $addToSet).
+   *  For GROUP rooms also returns readByCount and participantCount so the Flutter client
+   *  can gate the blue-tick promotion correctly (all members must read). */
+  async markMessagesRead(
+    userId: string,
+    roomId: string,
+    messageIds: string[],
+  ): Promise<{ readByCount?: number; participantCount?: number }> {
     const room = await this.chatRoomsRepository.findOne({
       _id: roomId,
       participants: userId,
@@ -143,7 +154,18 @@ export class ChatService {
       throw new ForbiddenException('Unauthorized to read messages in this room');
     }
 
-    return this.messagesRepository.markRead(messageIds, userId);
+    await this.messagesRepository.markRead(messageIds, userId);
+
+    if (room.type === ChatRoomType.GROUP) {
+      // Fetch updated readBy count for the first message (representative sample)
+      const msg = await this.messagesRepository.findOne({ clientMessageId: messageIds[0] });
+      const readByCount = msg ? (msg.readBy?.length ?? 0) : 0;
+      // Participant count excludes the original sender — use total participants - 1
+      const participantCount = Math.max((room.participants?.length ?? 1) - 1, 1);
+      return { readByCount, participantCount };
+    }
+
+    return {};
   }
 
   async markMessagesDelivered(userId: string, roomId: string, messageIds: string[]) {
@@ -250,30 +272,33 @@ export class ChatService {
   }
 
   /**
-   * Removes the requester from the group. If they are the last admin, randomly
-   * promotes another participant to admin before leaving.
+   * Removes the requester from the group. If they are the last admin, promotes
+   * the earliest-joining remaining participant (participants[0] in insertion order).
    */
-  async leaveGroup(requesterPhoneNumber: string, requesterUserId: string, roomId: string): Promise<{ message: string }> {
+  async leaveGroup(
+    requesterPhoneNumber: string,
+    requesterUserId: string,
+    roomId: string,
+  ): Promise<{ message: string; newAdmin: string | null }> {
     const room = await this.findGroupOrFail(roomId);
 
     const isAdmin = room.admins.includes(requesterPhoneNumber);
     const isLastAdmin = isAdmin && room.admins.length === 1;
+    let newAdmin: string | null = null;
 
     if (isLastAdmin) {
-      // Find the remaining participants (excluding self) to promote
+      // Earliest-joining participant = participants[0] after excluding self
       const otherParticipants = (room.participants as any[]).filter(
         (p) => p.toString() !== requesterUserId,
       );
 
-      if (otherParticipants.length === 0) {
-        // Last person in the group — just remove and leave room empty
-      } else {
-        // Promote a random other participant by fetching their phone number
-        const randomIndex = Math.floor(Math.random() * otherParticipants.length);
-        const promotedId = otherParticipants[randomIndex].toString();
+      if (otherParticipants.length > 0) {
+        // Promote the first (earliest joiner) — MongoDB preserves insertion order
+        const promotedId = otherParticipants[0].toString();
         const promotedUser = await this.usersRepository.findById(promotedId);
 
         if (promotedUser) {
+          newAdmin = promotedUser.phoneNumber;
           await this.chatRoomsRepository.addAdmin(roomId, promotedUser.phoneNumber);
           await this.saveSystemMessage(
             roomId,
@@ -294,7 +319,33 @@ export class ChatService {
       await this.chatRoomsRepository.removeParticipant(roomId, user._id);
     }
 
-    return { message: 'You have left the group.' };
+    return { message: 'You have left the group.', newAdmin };
+  }
+
+  /** Admin-only: update group name and/or avatarUrl. */
+  async updateGroup(
+    requesterPhoneNumber: string,
+    roomId: string,
+    dto: { name?: string; avatarUrl?: string },
+  ): Promise<ChatRoomDocument> {
+    const room = await this.findGroupOrFail(roomId);
+    this.assertIsAdmin(room, requesterPhoneNumber);
+
+    const update: Record<string, unknown> = {};
+    if (dto.name !== undefined && dto.name.trim().length > 0) {
+      update.name = dto.name.trim();
+    }
+    if (dto.avatarUrl !== undefined) {
+      update.avatarUrl = dto.avatarUrl;
+    }
+
+    const updated = await this.chatRoomsRepository.findOneAndUpdate(
+      { _id: roomId },
+      { $set: update },
+    );
+
+    if (!updated) throw new NotFoundException('Chat room not found.');
+    return updated;
   }
 
   // ─────────────────────────────────────────────────────────────────────────────

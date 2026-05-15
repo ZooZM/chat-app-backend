@@ -25,7 +25,10 @@ export declare class ChatService {
         _id: any;
     }[]>;
     getRoomMessages(roomId: string, limit?: number, cursor?: string): Promise<MessageDocument[]>;
-    markMessagesRead(userId: string, roomId: string, messageIds: string[]): Promise<void>;
+    markMessagesRead(userId: string, roomId: string, messageIds: string[]): Promise<{
+        readByCount?: number;
+        participantCount?: number;
+    }>;
     markMessagesDelivered(userId: string, roomId: string, messageIds: string[]): Promise<void>;
     syncStatuses(clientMessageIds: string[]): Promise<{
         clientMessageId: string;
@@ -36,7 +39,12 @@ export declare class ChatService {
     removeParticipant(requesterPhoneNumber: string, roomId: string, dto: RemoveParticipantDto): Promise<ChatRoomDocument>;
     leaveGroup(requesterPhoneNumber: string, requesterUserId: string, roomId: string): Promise<{
         message: string;
+        newAdmin: string | null;
     }>;
+    updateGroup(requesterPhoneNumber: string, roomId: string, dto: {
+        name?: string;
+        avatarUrl?: string;
+    }): Promise<ChatRoomDocument>;
     private findGroupOrFail;
     private assertIsAdmin;
     private resolvePhoneNumbersToObjectIds;

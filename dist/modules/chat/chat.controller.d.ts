@@ -1,9 +1,11 @@
 import { ChatService } from './chat.service';
+import { ChatGateway } from './chat.gateway';
 import { CreateGroupDto, AddParticipantsDto, RemoveParticipantDto } from './dto/group.dto';
 import { ResolvePrivateChatDto } from './dto/resolve-private-chat.dto';
 export declare class ChatController {
     private readonly chatService;
-    constructor(chatService: ChatService);
+    private readonly chatGateway;
+    constructor(chatService: ChatService, chatGateway: ChatGateway);
     getUserRooms(req: any, limit?: number, cursor?: string): Promise<import("./schemas/chat-room.schema").ChatRoomDocument[]>;
     getRoomMessages(roomId: string, limit?: number, cursor?: string): Promise<import("./schemas/message.schema").MessageDocument[]>;
     resolvePrivateChat(req: any, dto: ResolvePrivateChatDto): Promise<{
@@ -36,5 +38,10 @@ export declare class ChatController {
     }>;
     leaveGroup(req: any, roomId: string): Promise<{
         message: string;
+        newAdmin: string | null;
     }>;
+    updateGroup(req: any, roomId: string, dto: {
+        name?: string;
+        avatarUrl?: string;
+    }): Promise<import("./schemas/chat-room.schema").ChatRoomDocument>;
 }

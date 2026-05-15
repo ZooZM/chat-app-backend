@@ -1,7 +1,8 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards, Request } from '@nestjs/common';
+import { Controller, Post, Delete, Body, HttpCode, HttpStatus, UseGuards, Request } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { SendOtpDto } from './dto/send-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -37,6 +38,12 @@ export class AuthController {
     return this.authService.verifyOtp(verifyOtpDto);
   }
 
+  @HttpCode(HttpStatus.OK)
+  @Post('refresh')
+  async refresh(@Body() refreshTokenDto: RefreshTokenDto) {
+    return this.authService.refreshTokens(refreshTokenDto);
+  }
+
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.NO_CONTENT)
   @Post('device-token')
@@ -45,5 +52,12 @@ export class AuthController {
     @Body() dto: { token: string; platform: 'fcm' | 'apns' },
   ) {
     await this.deviceTokensRepository.upsertToken(req.user.userId, dto.token, dto.platform);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Delete('device-token')
+  async unregisterDeviceTokens(@Request() req: any) {
+    await this.deviceTokensRepository.deleteAllTokensForUser(req.user.userId);
   }
 }

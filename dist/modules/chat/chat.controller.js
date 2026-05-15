@@ -19,13 +19,16 @@ const multer_1 = require("multer");
 const path_1 = require("path");
 const crypto_1 = require("crypto");
 const chat_service_1 = require("./chat.service");
+const chat_gateway_1 = require("./chat.gateway");
 const jwt_auth_guard_1 = require("../../common/guards/jwt-auth.guard");
 const group_dto_1 = require("./dto/group.dto");
 const resolve_private_chat_dto_1 = require("./dto/resolve-private-chat.dto");
 let ChatController = class ChatController {
     chatService;
-    constructor(chatService) {
+    chatGateway;
+    constructor(chatService, chatGateway) {
         this.chatService = chatService;
+        this.chatGateway = chatGateway;
     }
     async getUserRooms(req, limit, cursor) {
         const l = limit ? parseInt(limit.toString(), 10) : 20;
@@ -55,6 +58,12 @@ let ChatController = class ChatController {
     async createGroup(req, dto) {
         const { userId, phoneNumber } = req.user;
         const group = await this.chatService.createGroup(phoneNumber, userId, dto);
+        const otherParticipantIds = group.participants
+            .map((p) => (p?._id ?? p)?.toString?.() ?? String(p))
+            .filter((id) => id && id !== userId);
+        if (otherParticipantIds.length > 0) {
+            await this.chatGateway.broadcastNewChatRoom(otherParticipantIds, group._id.toString(), { room: group });
+        }
         return {
             message: `Group "${dto.name}" created successfully.`,
             data: group,
@@ -79,6 +88,16 @@ let ChatController = class ChatController {
     async leaveGroup(req, roomId) {
         const { userId, phoneNumber } = req.user;
         return this.chatService.leaveGroup(phoneNumber, userId, roomId);
+    }
+    async updateGroup(req, roomId, dto) {
+        const { phoneNumber } = req.user;
+        const updated = await this.chatService.updateGroup(phoneNumber, roomId, dto);
+        this.chatGateway.broadcastRoomUpdated(roomId, {
+            roomId,
+            name: updated.name,
+            avatarUrl: updated.avatarUrl,
+        });
+        return updated;
     }
 };
 exports.ChatController = ChatController;
@@ -182,9 +201,20 @@ __decorate([
     __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", Promise)
 ], ChatController.prototype, "leaveGroup", null);
+__decorate([
+    (0, common_1.Patch)('group/:roomId'),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Param)('roomId')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, Object]),
+    __metadata("design:returntype", Promise)
+], ChatController.prototype, "updateGroup", null);
 exports.ChatController = ChatController = __decorate([
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     (0, common_1.Controller)('chat'),
-    __metadata("design:paramtypes", [chat_service_1.ChatService])
+    __metadata("design:paramtypes", [chat_service_1.ChatService,
+        chat_gateway_1.ChatGateway])
 ], ChatController);
 //# sourceMappingURL=chat.controller.js.map

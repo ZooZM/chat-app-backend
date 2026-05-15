@@ -58,6 +58,15 @@ let MessagesRepository = class MessagesRepository extends base_repository_1.Base
             .lean()
             .exec();
     }
+    async softDelete(clientMessageId, requesterId, windowMinutes) {
+        const cutoff = new Date(Date.now() - windowMinutes * 60 * 1000);
+        return this.messageModel.findOneAndUpdate({
+            clientMessageId,
+            senderId: new mongoose_2.Types.ObjectId(requesterId),
+            createdAt: { $gte: cutoff },
+            isDeleted: false,
+        }, { $set: { isDeleted: true, content: '' } }, { new: true }).exec();
+    }
 };
 exports.MessagesRepository = MessagesRepository;
 exports.MessagesRepository = MessagesRepository = __decorate([

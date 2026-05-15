@@ -69,7 +69,8 @@ let ChatService = class ChatService {
             metadata: payload.metadata,
         });
         await this.chatRoomsRepository.updateLastMessage(payload.chatRoomId, savedMessage._id.toString());
-        return { message: savedMessage, isNew: true };
+        const populated = await savedMessage.populate('senderId', 'name phoneNumber');
+        return { message: populated, isNew: true };
     }
     async saveSystemMessage(roomId, content) {
         const message = await this.messagesRepository.create({
@@ -97,7 +98,14 @@ let ChatService = class ChatService {
         if (!room) {
             throw new common_1.ForbiddenException('Unauthorized to read messages in this room');
         }
-        return this.messagesRepository.markRead(messageIds, userId);
+        await this.messagesRepository.markRead(messageIds, userId);
+        if (room.type === chat_room_schema_1.ChatRoomType.GROUP) {
+            const msg = await this.messagesRepository.findOne({ clientMessageId: messageIds[0] });
+            const readByCount = msg ? (msg.readBy?.length ?? 0) : 0;
+            const participantCount = Math.max((room.participants?.length ?? 1) - 1, 1);
+            return { readByCount, participantCount };
+        }
+        return {};
     }
     async markMessagesDelivered(userId, roomId, messageIds) {
         const room = await this.chatRoomsRepository.findOne({
@@ -156,15 +164,14 @@ let ChatService = class ChatService {
         const room = await this.findGroupOrFail(roomId);
         const isAdmin = room.admins.includes(requesterPhoneNumber);
         const isLastAdmin = isAdmin && room.admins.length === 1;
+        let newAdmin = null;
         if (isLastAdmin) {
             const otherParticipants = room.participants.filter((p) => p.toString() !== requesterUserId);
-            if (otherParticipants.length === 0) {
-            }
-            else {
-                const randomIndex = Math.floor(Math.random() * otherParticipants.length);
-                const promotedId = otherParticipants[randomIndex].toString();
+            if (otherParticipants.length > 0) {
+                const promotedId = otherParticipants[0].toString();
                 const promotedUser = await this.usersRepository.findById(promotedId);
                 if (promotedUser) {
+                    newAdmin = promotedUser.phoneNumber;
                     await this.chatRoomsRepository.addAdmin(roomId, promotedUser.phoneNumber);
                     await this.saveSystemMessage(roomId, `${promotedUser.phoneNumber} is now an admin (${requesterPhoneNumber} left the group)`);
                 }
@@ -178,7 +185,22 @@ let ChatService = class ChatService {
         if (user) {
             await this.chatRoomsRepository.removeParticipant(roomId, user._id);
         }
-        return { message: 'You have left the group.' };
+        return { message: 'You have left the group.', newAdmin };
+    }
+    async updateGroup(requesterPhoneNumber, roomId, dto) {
+        const room = await this.findGroupOrFail(roomId);
+        this.assertIsAdmin(room, requesterPhoneNumber);
+        const update = {};
+        if (dto.name !== undefined && dto.name.trim().length > 0) {
+            update.name = dto.name.trim();
+        }
+        if (dto.avatarUrl !== undefined) {
+            update.avatarUrl = dto.avatarUrl;
+        }
+        const updated = await this.chatRoomsRepository.findOneAndUpdate({ _id: roomId }, { $set: update });
+        if (!updated)
+            throw new common_1.NotFoundException('Chat room not found.');
+        return updated;
     }
     async findGroupOrFail(roomId) {
         const room = await this.chatRoomsRepository.findById(roomId);

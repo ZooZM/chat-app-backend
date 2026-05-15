@@ -28,20 +28,32 @@ const users_service_1 = require("../users/users.service");
 const request_call_dto_1 = require("./dto/request-call.dto");
 const accept_call_dto_1 = require("./dto/accept-call.dto");
 const reject_call_dto_1 = require("./dto/reject-call.dto");
+const messages_repository_1 = require("./messages.repository");
+const chat_config_1 = require("./chat.config");
+const push_service_1 = require("../notifications/push.service");
+const chat_rooms_repository_1 = require("./chat-rooms.repository");
 let ChatGateway = ChatGateway_1 = class ChatGateway {
     jwtService;
     chatService;
     usersService;
     configService;
+    messagesRepository;
+    pushService;
+    chatRoomsRepository;
     server;
     activeSockets = new Map();
     activeCalls = new Map();
+    activeGroupCalls = new Map();
+    userRoomIds = new Map();
     logger = new common_1.Logger(ChatGateway_1.name);
-    constructor(jwtService, chatService, usersService, configService) {
+    constructor(jwtService, chatService, usersService, configService, messagesRepository, pushService, chatRoomsRepository) {
         this.jwtService = jwtService;
         this.chatService = chatService;
         this.usersService = usersService;
         this.configService = configService;
+        this.messagesRepository = messagesRepository;
+        this.pushService = pushService;
+        this.chatRoomsRepository = chatRoomsRepository;
     }
     async handleConnection(client) {
         try {
@@ -58,12 +70,20 @@ let ChatGateway = ChatGateway_1 = class ChatGateway {
             client.user = { userId: payload.sub, phoneNumber: payload.phoneNumber };
             const userRooms = await this.chatService.getUserRoomsForSocket(client.user.userId);
             const roomIds = userRooms.map((room) => room._id.toString());
+            await client.join(`user:${client.user.userId}`);
             if (roomIds.length > 0) {
                 await client.join(roomIds);
             }
             this.logger.log(`[WS CONNECTED] User: ${client.user.userId} | Socket: ${client.id} | Auto-joined ${roomIds.length} room(s)`);
             await this.usersService.updateOnlineStatus(client.user.userId, true);
             this.activeSockets.set(client.user.userId, client);
+            this.userRoomIds.set(client.user.userId, roomIds);
+            for (const roomId of roomIds) {
+                client.to(roomId).emit('userStatus', {
+                    userId: client.user.userId,
+                    isOnline: true,
+                });
+            }
             client.emit('connected', {
                 userId: client.user.userId,
                 joinedRooms: roomIds,
@@ -79,6 +99,14 @@ let ChatGateway = ChatGateway_1 = class ChatGateway {
             if (this.activeSockets.get(client.user.userId)?.id === client.id) {
                 this.activeSockets.delete(client.user.userId);
                 await this.usersService.updateOnlineStatus(client.user.userId, false);
+                const roomIds = this.userRoomIds.get(client.user.userId) ?? [];
+                for (const roomId of roomIds) {
+                    this.server.to(roomId).emit('userStatus', {
+                        userId: client.user.userId,
+                        isOnline: false,
+                    });
+                }
+                this.userRoomIds.delete(client.user.userId);
             }
             const partnerId = this.activeCalls.get(client.user.userId);
             if (partnerId) {
@@ -88,6 +116,12 @@ let ChatGateway = ChatGateway_1 = class ChatGateway {
                 }
                 this.activeCalls.delete(client.user.userId);
                 this.activeCalls.delete(partnerId);
+            }
+            for (const [chatRoomId, participants] of this.activeGroupCalls.entries()) {
+                if (participants.has(client.user.userId)) {
+                    this._handleGroupCallLeave(chatRoomId, client.user.userId);
+                    break;
+                }
             }
         }
         this.logger.log(`[WS DISCONNECTED] Socket: ${client.id} | User: ${client.user?.userId ?? 'unauthenticated'}`);
@@ -111,6 +145,19 @@ let ChatGateway = ChatGateway_1 = class ChatGateway {
             });
             if (isNew) {
                 client.broadcast.to(payload.chatRoomId).emit('newMessage', message);
+                const room = await this.chatRoomsRepository.findById(payload.chatRoomId);
+                if (room) {
+                    for (const participantId of room.participants) {
+                        const id = participantId.toString();
+                        if (id !== client.user.userId && !this.activeSockets.has(id)) {
+                            this.pushService.notifyOfflineUser(id, {
+                                content: message.content ?? '',
+                                senderName: client.user.phoneNumber,
+                                roomId: payload.chatRoomId,
+                            }).catch(() => { });
+                        }
+                    }
+                }
             }
             else {
                 console.log(`⚡ Duplicate suppressed for clientMessageId: ${payload.clientMessageId}`);
@@ -157,15 +204,35 @@ let ChatGateway = ChatGateway_1 = class ChatGateway {
             const idsToMark = payload.clientMessageIds ? payload.clientMessageIds : (payload.clientMessageId ? [payload.clientMessageId] : []);
             if (idsToMark.length === 0)
                 return;
-            await this.chatService.markMessagesRead(client.user.userId, payload.chatRoomId, idsToMark);
+            const counts = await this.chatService.markMessagesRead(client.user.userId, payload.chatRoomId, idsToMark);
             client.broadcast.to(payload.chatRoomId).emit('messageRead', {
                 chatRoomId: payload.chatRoomId,
                 clientMessageIds: idsToMark,
                 readBy: client.user.userId,
+                ...(counts.readByCount !== undefined && {
+                    readByCount: counts.readByCount,
+                    participantCount: counts.participantCount,
+                }),
             });
         }
         catch (e) {
             console.error('🛡️ Mark Read Error:', e.message);
+        }
+    }
+    async handleDeleteForEveryone(client, payload) {
+        if (!client.user)
+            return;
+        try {
+            const deleted = await this.messagesRepository.softDelete(payload.clientMessageId, client.user.userId, chat_config_1.CHAT_CONFIG.DELETE_WINDOW_MINUTES);
+            if (!deleted)
+                return;
+            this.server.to(payload.chatRoomId).emit('messageDeleted', {
+                clientMessageId: payload.clientMessageId,
+                chatRoomId: payload.chatRoomId,
+            });
+        }
+        catch (e) {
+            console.error('🛡️ Delete For Everyone Error:', e.message);
         }
     }
     async handleRequestCall(client, payload) {
@@ -267,6 +334,140 @@ let ChatGateway = ChatGateway_1 = class ChatGateway {
             this.logger.log(`[Call] Call ended between ${userId} and ${partnerId}`);
         }
     }
+    async handleRequestGroupCall(client, payload) {
+        if (!client.user)
+            return;
+        const { chatRoomId, isVideo } = payload;
+        const room = await this.chatRoomsRepository.findOne({ _id: chatRoomId, participants: client.user.userId });
+        if (!room) {
+            client.emit('callError', { reason: 'not_a_participant' });
+            return;
+        }
+        if (!this.activeGroupCalls.has(chatRoomId)) {
+            this.activeGroupCalls.set(chatRoomId, new Set());
+        }
+        this.activeGroupCalls.get(chatRoomId).add(client.user.userId);
+        const caller = await this.usersService.findById(client.user.userId);
+        const callerName = caller?.phoneNumber ?? client.user.phoneNumber;
+        for (const participantId of room.participants) {
+            const id = participantId.toString();
+            if (id === client.user.userId)
+                continue;
+            const participantSocket = this.activeSockets.get(id);
+            if (participantSocket) {
+                participantSocket.emit('incomingGroupCall', {
+                    chatRoomId,
+                    callerUserId: client.user.userId,
+                    callerName,
+                    groupName: room.name ?? '',
+                    isVideo,
+                    currentParticipantCount: 1,
+                });
+            }
+        }
+        this.logger.log(`[GroupCall] requestGroupCall room=${chatRoomId} by ${client.user.userId}`);
+    }
+    async handleAcceptGroupCall(client, payload) {
+        if (!client.user)
+            return;
+        const { chatRoomId } = payload;
+        const participants = this.activeGroupCalls.get(chatRoomId);
+        if (!participants) {
+            client.emit('callError', { reason: 'no_active_group_call' });
+            return;
+        }
+        if (participants.size >= 32) {
+            client.emit('callError', { reason: 'group_call_full' });
+            return;
+        }
+        participants.add(client.user.userId);
+        const livekitUrl = this.configService.get('LIVEKIT_WS_URL');
+        const apiKey = this.configService.get('LIVEKIT_API_KEY');
+        const apiSecret = this.configService.get('LIVEKIT_API_SECRET');
+        const token = new livekit_server_sdk_1.AccessToken(apiKey, apiSecret, { identity: client.user.userId });
+        token.addGrant({ roomJoin: true, room: chatRoomId, canPublish: true, canSubscribe: true });
+        const livekitToken = await token.toJwt();
+        client.emit('callAccepted', {
+            chatRoomId,
+            livekitUrl,
+            livekitToken,
+            currentParticipants: Array.from(participants),
+        });
+        for (const existingId of participants) {
+            if (existingId === client.user.userId)
+                continue;
+            const s = this.activeSockets.get(existingId);
+            if (s) {
+                s.emit('groupCallParticipantJoined', {
+                    chatRoomId,
+                    userId: client.user.userId,
+                    phoneNumber: client.user.phoneNumber,
+                });
+            }
+        }
+        this.logger.log(`[GroupCall] acceptGroupCall room=${chatRoomId} by ${client.user.userId}`);
+    }
+    handleDeclineGroupCall(client, payload) {
+        if (!client.user)
+            return;
+        this.logger.log(`[GroupCall] declineGroupCall room=${payload.chatRoomId} by ${client.user.userId}`);
+    }
+    handleLeaveGroupCall(client, payload) {
+        if (!client.user)
+            return;
+        this._handleGroupCallLeave(payload.chatRoomId, client.user.userId);
+    }
+    handleGroupCallRecordingStateChanged(client, payload) {
+        if (!client.user)
+            return;
+        const { chatRoomId, isRecording } = payload;
+        const participants = this.activeGroupCalls.get(chatRoomId);
+        if (!participants)
+            return;
+        for (const userId of participants) {
+            const s = this.activeSockets.get(userId);
+            if (s) {
+                s.emit('groupCallRecordingStateChanged', { chatRoomId, isRecording, recorderId: client.user.userId });
+            }
+        }
+    }
+    _handleGroupCallLeave(chatRoomId, userId) {
+        const participants = this.activeGroupCalls.get(chatRoomId);
+        if (!participants || !participants.has(userId))
+            return;
+        participants.delete(userId);
+        for (const remainingId of participants) {
+            const s = this.activeSockets.get(remainingId);
+            if (s) {
+                s.emit('groupCallParticipantLeft', { chatRoomId, userId });
+            }
+        }
+        if (participants.size === 1) {
+            const lastId = participants.values().next().value;
+            const lastSocket = this.activeSockets.get(lastId);
+            if (lastSocket) {
+                lastSocket.emit('callEnded', { chatRoomId, reason: 'last-participant' });
+            }
+            this.activeGroupCalls.delete(chatRoomId);
+        }
+        else if (participants.size === 0) {
+            this.activeGroupCalls.delete(chatRoomId);
+        }
+        this.logger.log(`[GroupCall] ${userId} left group call room=${chatRoomId}. Remaining: ${participants?.size ?? 0}`);
+    }
+    broadcastRoomUpdated(roomId, data) {
+        this.server.to(roomId).emit('chatRoomUpdated', data);
+    }
+    async broadcastNewChatRoom(userIds, roomId, data) {
+        for (const userId of userIds) {
+            const personal = `user:${userId}`;
+            const sockets = await this.server.in(personal).fetchSockets();
+            for (const s of sockets) {
+                await s.join(roomId);
+            }
+            this.server.to(personal).emit('newChatRoom', data);
+        }
+    }
 };
 exports.ChatGateway = ChatGateway;
 __decorate([
@@ -317,6 +518,14 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], ChatGateway.prototype, "handleMarkRead", null);
 __decorate([
+    (0, websockets_1.SubscribeMessage)('deleteForEveryone'),
+    __param(0, (0, websockets_1.ConnectedSocket)()),
+    __param(1, (0, websockets_1.MessageBody)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", Promise)
+], ChatGateway.prototype, "handleDeleteForEveryone", null);
+__decorate([
     (0, common_1.UsePipes)(new common_1.ValidationPipe({ transform: true, whitelist: true })),
     (0, websockets_1.SubscribeMessage)('requestCall'),
     __param(0, (0, websockets_1.ConnectedSocket)()),
@@ -350,6 +559,46 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], ChatGateway.prototype, "handleEndCall", null);
+__decorate([
+    (0, websockets_1.SubscribeMessage)('requestGroupCall'),
+    __param(0, (0, websockets_1.ConnectedSocket)()),
+    __param(1, (0, websockets_1.MessageBody)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", Promise)
+], ChatGateway.prototype, "handleRequestGroupCall", null);
+__decorate([
+    (0, websockets_1.SubscribeMessage)('acceptGroupCall'),
+    __param(0, (0, websockets_1.ConnectedSocket)()),
+    __param(1, (0, websockets_1.MessageBody)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", Promise)
+], ChatGateway.prototype, "handleAcceptGroupCall", null);
+__decorate([
+    (0, websockets_1.SubscribeMessage)('declineGroupCall'),
+    __param(0, (0, websockets_1.ConnectedSocket)()),
+    __param(1, (0, websockets_1.MessageBody)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", void 0)
+], ChatGateway.prototype, "handleDeclineGroupCall", null);
+__decorate([
+    (0, websockets_1.SubscribeMessage)('leaveGroupCall'),
+    __param(0, (0, websockets_1.ConnectedSocket)()),
+    __param(1, (0, websockets_1.MessageBody)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", void 0)
+], ChatGateway.prototype, "handleLeaveGroupCall", null);
+__decorate([
+    (0, websockets_1.SubscribeMessage)('groupCallRecordingStateChanged'),
+    __param(0, (0, websockets_1.ConnectedSocket)()),
+    __param(1, (0, websockets_1.MessageBody)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", void 0)
+], ChatGateway.prototype, "handleGroupCallRecordingStateChanged", null);
 exports.ChatGateway = ChatGateway = ChatGateway_1 = __decorate([
     (0, websockets_1.WebSocketGateway)({
         cors: { origin: '*' },
@@ -357,6 +606,9 @@ exports.ChatGateway = ChatGateway = ChatGateway_1 = __decorate([
     __metadata("design:paramtypes", [jwt_1.JwtService,
         chat_service_1.ChatService,
         users_service_1.UsersService,
-        config_1.ConfigService])
+        config_1.ConfigService,
+        messages_repository_1.MessagesRepository,
+        push_service_1.PushService,
+        chat_rooms_repository_1.ChatRoomsRepository])
 ], ChatGateway);
 //# sourceMappingURL=chat.gateway.js.map

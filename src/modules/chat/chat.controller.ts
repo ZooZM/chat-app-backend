@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Param,
   Query,
   Body,
@@ -18,6 +19,7 @@ import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { randomUUID } from 'crypto';
 import { ChatService } from './chat.service';
+import { ChatGateway } from './chat.gateway';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CreateGroupDto, AddParticipantsDto, RemoveParticipantDto } from './dto/group.dto';
 import { ResolvePrivateChatDto } from './dto/resolve-private-chat.dto';
@@ -25,7 +27,10 @@ import { ResolvePrivateChatDto } from './dto/resolve-private-chat.dto';
 @UseGuards(JwtAuthGuard)
 @Controller('chat')
 export class ChatController {
-  constructor(private readonly chatService: ChatService) { }
+  constructor(
+    private readonly chatService: ChatService,
+    private readonly chatGateway: ChatGateway,
+  ) { }
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Room & Message Queries
@@ -132,6 +137,22 @@ export class ChatController {
   async createGroup(@Request() req: any, @Body() dto: CreateGroupDto) {
     const { userId, phoneNumber } = req.user;
     const group = await this.chatService.createGroup(phoneNumber, userId, dto);
+
+    // Notify the other participants (creator already has the room in their
+    // response). The gateway also joins their live sockets to the new room
+    // so subsequent messages arrive immediately.
+    const otherParticipantIds = (group.participants as any[])
+      .map((p) => (p?._id ?? p)?.toString?.() ?? String(p))
+      .filter((id) => id && id !== userId);
+
+    if (otherParticipantIds.length > 0) {
+      await this.chatGateway.broadcastNewChatRoom(
+        otherParticipantIds,
+        group._id.toString(),
+        { room: group },
+      );
+    }
+
     return {
       message: `Group "${dto.name}" created successfully.`,
       data: group,
@@ -186,5 +207,27 @@ export class ChatController {
   async leaveGroup(@Request() req: any, @Param('roomId') roomId: string) {
     const { userId, phoneNumber } = req.user;
     return this.chatService.leaveGroup(phoneNumber, userId, roomId);
+  }
+
+  /**
+   * PATCH /chat/group/:roomId
+   * Admin-only: update group name and/or avatar URL.
+   * On success, emits `chatRoomUpdated` to all room participants via socket.
+   */
+  @Patch('group/:roomId')
+  @HttpCode(HttpStatus.OK)
+  async updateGroup(
+    @Request() req: any,
+    @Param('roomId') roomId: string,
+    @Body() dto: { name?: string; avatarUrl?: string },
+  ) {
+    const { phoneNumber } = req.user;
+    const updated = await this.chatService.updateGroup(phoneNumber, roomId, dto);
+    this.chatGateway.broadcastRoomUpdated(roomId, {
+      roomId,
+      name: updated.name,
+      avatarUrl: updated.avatarUrl,
+    });
+    return updated;
   }
 }

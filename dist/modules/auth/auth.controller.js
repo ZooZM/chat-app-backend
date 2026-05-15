@@ -17,12 +17,17 @@ const common_1 = require("@nestjs/common");
 const auth_service_1 = require("./auth.service");
 const send_otp_dto_1 = require("./dto/send-otp.dto");
 const verify_otp_dto_1 = require("./dto/verify-otp.dto");
+const refresh_token_dto_1 = require("./dto/refresh-token.dto");
 const register_dto_1 = require("./dto/register.dto");
 const login_dto_1 = require("./dto/login.dto");
+const jwt_auth_guard_1 = require("../../common/guards/jwt-auth.guard");
+const device_tokens_repository_1 = require("../notifications/device-tokens.repository");
 let AuthController = class AuthController {
     authService;
-    constructor(authService) {
+    deviceTokensRepository;
+    constructor(authService, deviceTokensRepository) {
         this.authService = authService;
+        this.deviceTokensRepository = deviceTokensRepository;
     }
     async register(registerDto) {
         return this.authService.register(registerDto);
@@ -35,6 +40,15 @@ let AuthController = class AuthController {
     }
     async verifyOtp(verifyOtpDto) {
         return this.authService.verifyOtp(verifyOtpDto);
+    }
+    async refresh(refreshTokenDto) {
+        return this.authService.refreshTokens(refreshTokenDto);
+    }
+    async registerDeviceToken(req, dto) {
+        await this.deviceTokensRepository.upsertToken(req.user.userId, dto.token, dto.platform);
+    }
+    async unregisterDeviceTokens(req) {
+        await this.deviceTokensRepository.deleteAllTokensForUser(req.user.userId);
     }
 };
 exports.AuthController = AuthController;
@@ -69,8 +83,36 @@ __decorate([
     __metadata("design:paramtypes", [verify_otp_dto_1.VerifyOtpDto]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "verifyOtp", null);
+__decorate([
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    (0, common_1.Post)('refresh'),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [refresh_token_dto_1.RefreshTokenDto]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "refresh", null);
+__decorate([
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, common_1.HttpCode)(common_1.HttpStatus.NO_CONTENT),
+    (0, common_1.Post)('device-token'),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "registerDeviceToken", null);
+__decorate([
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, common_1.HttpCode)(common_1.HttpStatus.NO_CONTENT),
+    (0, common_1.Delete)('device-token'),
+    __param(0, (0, common_1.Request)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "unregisterDeviceTokens", null);
 exports.AuthController = AuthController = __decorate([
     (0, common_1.Controller)('auth'),
-    __metadata("design:paramtypes", [auth_service_1.AuthService])
+    __metadata("design:paramtypes", [auth_service_1.AuthService,
+        device_tokens_repository_1.DeviceTokensRepository])
 ], AuthController);
 //# sourceMappingURL=auth.controller.js.map

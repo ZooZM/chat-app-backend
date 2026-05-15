@@ -13,12 +13,25 @@ exports.VideoService = void 0;
 const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
 const livekit_server_sdk_1 = require("livekit-server-sdk");
+const chat_rooms_repository_1 = require("../chat/chat-rooms.repository");
 let VideoService = class VideoService {
     configService;
-    constructor(configService) {
+    chatRoomsRepository;
+    constructor(configService, chatRoomsRepository) {
         this.configService = configService;
+        this.chatRoomsRepository = chatRoomsRepository;
     }
-    async generateRoomToken(userId, userName, roomName) {
+    async generateRoomToken(userId, userName, roomId) {
+        const isLegacyCallRoom = roomId.startsWith('call_');
+        if (!isLegacyCallRoom) {
+            const room = await this.chatRoomsRepository.findOne({
+                _id: roomId,
+                participants: userId,
+            });
+            if (!room) {
+                throw new common_1.ForbiddenException('You are not a participant of this room.');
+            }
+        }
         const apiKey = this.configService.get('LIVEKIT_API_KEY');
         const apiSecret = this.configService.get('LIVEKIT_API_SECRET');
         const at = new livekit_server_sdk_1.AccessToken(apiKey, apiSecret, {
@@ -27,7 +40,7 @@ let VideoService = class VideoService {
         });
         at.addGrant({
             roomJoin: true,
-            room: roomName,
+            room: roomId,
             canPublish: true,
             canSubscribe: true,
         });
@@ -37,6 +50,7 @@ let VideoService = class VideoService {
 exports.VideoService = VideoService;
 exports.VideoService = VideoService = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [config_1.ConfigService])
+    __metadata("design:paramtypes", [config_1.ConfigService,
+        chat_rooms_repository_1.ChatRoomsRepository])
 ], VideoService);
 //# sourceMappingURL=video.service.js.map
