@@ -9,7 +9,8 @@ export declare enum MessageType {
     LOCATION = "location",
     AUDIO = "audio",
     POLL = "poll",
-    EVENT = "event"
+    EVENT = "event",
+    VIDEO = "video"
 }
 export declare enum MessageStatus {
     PENDING = "pending",
@@ -34,6 +35,7 @@ export declare class MessageMetadata {
     title?: string;
     dateTime?: string;
     description?: string;
+    thumbnailUrl?: string;
 }
 export type MessageDocument = Message & Document;
 export declare class Message {
@@ -47,6 +49,8 @@ export declare class Message {
     status: MessageStatus;
     deliveredTo: string[];
     readBy: string[];
+    isDeleted: boolean;
+    waveformSamples: number[];
 }
 export declare const MessageSchema: import("mongoose").Schema<Message, import("mongoose").Model<Message, any, any, any, any, any, Message>, {}, {}, {}, {}, import("mongoose").DefaultSchemaOptions, Message, Document<unknown, {}, Message, {
     id: string;
@@ -139,6 +143,24 @@ export declare const MessageSchema: import("mongoose").Schema<Message, import("m
         id: string;
     }> | undefined;
     readBy?: import("mongoose").SchemaDefinitionProperty<string[], Message, Document<unknown, {}, Message, {
+        id: string;
+    }, import("mongoose").DefaultSchemaOptions> & Omit<Message & {
+        _id: Types.ObjectId;
+    } & {
+        __v: number;
+    }, "id"> & {
+        id: string;
+    }> | undefined;
+    isDeleted?: import("mongoose").SchemaDefinitionProperty<boolean, Message, Document<unknown, {}, Message, {
+        id: string;
+    }, import("mongoose").DefaultSchemaOptions> & Omit<Message & {
+        _id: Types.ObjectId;
+    } & {
+        __v: number;
+    }, "id"> & {
+        id: string;
+    }> | undefined;
+    waveformSamples?: import("mongoose").SchemaDefinitionProperty<number[], Message, Document<unknown, {}, Message, {
         id: string;
     }, import("mongoose").DefaultSchemaOptions> & Omit<Message & {
         _id: Types.ObjectId;

@@ -1,4 +1,4 @@
-import { Document } from 'mongoose';
+import { Document, Types } from 'mongoose';
 export type UserDocument = User & Document;
 export declare enum SubscriptionTier {
     FREE = "FREE",
@@ -32,11 +32,12 @@ export declare class User {
     isOnline: boolean;
     location?: Location;
     subscription: Subscription;
+    blockedUsers: Types.ObjectId[];
 }
 export declare const UserSchema: import("mongoose").Schema<User, import("mongoose").Model<User, any, any, any, any, any, User>, {}, {}, {}, {}, import("mongoose").DefaultSchemaOptions, User, Document<unknown, {}, User, {
     id: string;
 }, import("mongoose").DefaultSchemaOptions> & Omit<User & {
-    _id: import("mongoose").Types.ObjectId;
+    _id: Types.ObjectId;
 } & {
     __v: number;
 }, "id"> & {
@@ -45,7 +46,7 @@ export declare const UserSchema: import("mongoose").Schema<User, import("mongoos
     name?: import("mongoose").SchemaDefinitionProperty<string, User, Document<unknown, {}, User, {
         id: string;
     }, import("mongoose").DefaultSchemaOptions> & Omit<User & {
-        _id: import("mongoose").Types.ObjectId;
+        _id: Types.ObjectId;
     } & {
         __v: number;
     }, "id"> & {
@@ -54,7 +55,7 @@ export declare const UserSchema: import("mongoose").Schema<User, import("mongoos
     phoneNumber?: import("mongoose").SchemaDefinitionProperty<string, User, Document<unknown, {}, User, {
         id: string;
     }, import("mongoose").DefaultSchemaOptions> & Omit<User & {
-        _id: import("mongoose").Types.ObjectId;
+        _id: Types.ObjectId;
     } & {
         __v: number;
     }, "id"> & {
@@ -63,7 +64,7 @@ export declare const UserSchema: import("mongoose").Schema<User, import("mongoos
     email?: import("mongoose").SchemaDefinitionProperty<string | undefined, User, Document<unknown, {}, User, {
         id: string;
     }, import("mongoose").DefaultSchemaOptions> & Omit<User & {
-        _id: import("mongoose").Types.ObjectId;
+        _id: Types.ObjectId;
     } & {
         __v: number;
     }, "id"> & {
@@ -72,7 +73,7 @@ export declare const UserSchema: import("mongoose").Schema<User, import("mongoos
     password?: import("mongoose").SchemaDefinitionProperty<string | undefined, User, Document<unknown, {}, User, {
         id: string;
     }, import("mongoose").DefaultSchemaOptions> & Omit<User & {
-        _id: import("mongoose").Types.ObjectId;
+        _id: Types.ObjectId;
     } & {
         __v: number;
     }, "id"> & {
@@ -81,7 +82,7 @@ export declare const UserSchema: import("mongoose").Schema<User, import("mongoos
     isPhoneVerified?: import("mongoose").SchemaDefinitionProperty<boolean, User, Document<unknown, {}, User, {
         id: string;
     }, import("mongoose").DefaultSchemaOptions> & Omit<User & {
-        _id: import("mongoose").Types.ObjectId;
+        _id: Types.ObjectId;
     } & {
         __v: number;
     }, "id"> & {
@@ -90,7 +91,7 @@ export declare const UserSchema: import("mongoose").Schema<User, import("mongoos
     fcmToken?: import("mongoose").SchemaDefinitionProperty<string | undefined, User, Document<unknown, {}, User, {
         id: string;
     }, import("mongoose").DefaultSchemaOptions> & Omit<User & {
-        _id: import("mongoose").Types.ObjectId;
+        _id: Types.ObjectId;
     } & {
         __v: number;
     }, "id"> & {
@@ -99,7 +100,7 @@ export declare const UserSchema: import("mongoose").Schema<User, import("mongoos
     refreshToken?: import("mongoose").SchemaDefinitionProperty<string | undefined, User, Document<unknown, {}, User, {
         id: string;
     }, import("mongoose").DefaultSchemaOptions> & Omit<User & {
-        _id: import("mongoose").Types.ObjectId;
+        _id: Types.ObjectId;
     } & {
         __v: number;
     }, "id"> & {
@@ -108,7 +109,7 @@ export declare const UserSchema: import("mongoose").Schema<User, import("mongoos
     isOnline?: import("mongoose").SchemaDefinitionProperty<boolean, User, Document<unknown, {}, User, {
         id: string;
     }, import("mongoose").DefaultSchemaOptions> & Omit<User & {
-        _id: import("mongoose").Types.ObjectId;
+        _id: Types.ObjectId;
     } & {
         __v: number;
     }, "id"> & {
@@ -117,7 +118,7 @@ export declare const UserSchema: import("mongoose").Schema<User, import("mongoos
     location?: import("mongoose").SchemaDefinitionProperty<Location | undefined, User, Document<unknown, {}, User, {
         id: string;
     }, import("mongoose").DefaultSchemaOptions> & Omit<User & {
-        _id: import("mongoose").Types.ObjectId;
+        _id: Types.ObjectId;
     } & {
         __v: number;
     }, "id"> & {
@@ -126,7 +127,16 @@ export declare const UserSchema: import("mongoose").Schema<User, import("mongoos
     subscription?: import("mongoose").SchemaDefinitionProperty<Subscription, User, Document<unknown, {}, User, {
         id: string;
     }, import("mongoose").DefaultSchemaOptions> & Omit<User & {
-        _id: import("mongoose").Types.ObjectId;
+        _id: Types.ObjectId;
+    } & {
+        __v: number;
+    }, "id"> & {
+        id: string;
+    }> | undefined;
+    blockedUsers?: import("mongoose").SchemaDefinitionProperty<Types.ObjectId[], User, Document<unknown, {}, User, {
+        id: string;
+    }, import("mongoose").DefaultSchemaOptions> & Omit<User & {
+        _id: Types.ObjectId;
     } & {
         __v: number;
     }, "id"> & {

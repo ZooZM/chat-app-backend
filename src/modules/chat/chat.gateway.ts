@@ -89,6 +89,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       // --- 3. Set user online in DB ---
       await this.usersService.updateOnlineStatus(client.user.userId, true);
+      for (const room of userRooms) {
+        this.server.to(room._id.toString()).emit('userStatus', {
+          userId: client.user.userId,
+          isOnline: true,
+        });
+      }
 
       // Track active socket and cache room membership for disconnect broadcast
       this.activeSockets.set(client.user.userId, client);
@@ -138,8 +144,17 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         if (partnerSocket) {
           partnerSocket.emit('callEnded', { reason: 'peer_disconnected' });
         }
-        this.activeCalls.delete(client.user.userId);
-        this.activeCalls.delete(partnerId);
+
+        // --- Terminate active call if disconnected during one ---
+        const partnerId = this.activeCalls.get(client.user.userId);
+        if (partnerId) {
+          const partnerSocket = this.activeSockets.get(partnerId);
+          if (partnerSocket) {
+            partnerSocket.emit('callEnded', { reason: 'peer_disconnected' });
+          }
+          this.activeCalls.delete(client.user.userId);
+          this.activeCalls.delete(partnerId);
+        }
       }
 
       // --- FR-026: Clean up group calls on disconnect ---
@@ -175,17 +190,19 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody() payload: SendMessageDto,
   ) {
     if (!client.user) return;
+    // Capture into a local const so TypeScript's narrowing persists inside closures.
+    const user = client.user;
 
     try {
       console.log('🚀 Payload received from Flutter:', payload);
 
-      const { message, isNew } = await this.chatService.saveMessage(client.user.userId, payload);
+      const { message, isNew } = await this.chatService.saveMessage(user.userId, payload);
 
       // ── Always ACK the sender ────────────────────────────────────────────────
       // Emit messageSent regardless of whether the message is new or a duplicate.
       // If isNew=false the client is retrying after a dropped ACK — it still
       // needs this confirmation to promote the message from pending → sent.
-      client.emit('messageSent', { 
+      client.emit('messageSent', {
         clientMessageId: payload.clientMessageId,
         createdAt: (message as any).createdAt
       });

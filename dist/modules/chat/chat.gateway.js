@@ -76,6 +76,12 @@ let ChatGateway = ChatGateway_1 = class ChatGateway {
             }
             this.logger.log(`[WS CONNECTED] User: ${client.user.userId} | Socket: ${client.id} | Auto-joined ${roomIds.length} room(s)`);
             await this.usersService.updateOnlineStatus(client.user.userId, true);
+            for (const room of userRooms) {
+                this.server.to(room._id.toString()).emit('userStatus', {
+                    userId: client.user.userId,
+                    isOnline: true,
+                });
+            }
             this.activeSockets.set(client.user.userId, client);
             this.userRoomIds.set(client.user.userId, roomIds);
             for (const roomId of roomIds) {
@@ -136,9 +142,10 @@ let ChatGateway = ChatGateway_1 = class ChatGateway {
     async handleSendMessage(client, payload) {
         if (!client.user)
             return;
+        const user = client.user;
         try {
             console.log('🚀 Payload received from Flutter:', payload);
-            const { message, isNew } = await this.chatService.saveMessage(client.user.userId, payload);
+            const { message, isNew } = await this.chatService.saveMessage(user.userId, payload);
             client.emit('messageSent', {
                 clientMessageId: payload.clientMessageId,
                 createdAt: message.createdAt

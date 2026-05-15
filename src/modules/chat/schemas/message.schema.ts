@@ -12,6 +12,7 @@ export enum MessageType {
   AUDIO      = 'audio',
   POLL       = 'poll',
   EVENT      = 'event',
+  VIDEO      = 'video',
 }
 
 export enum MessageStatus {
@@ -48,6 +49,7 @@ export class MessageMetadata {
   title?:        string;
   dateTime?:     string;
   description?:  string;
+  thumbnailUrl?: string;
 }
 
 export type MessageDocument = Message & Document;
@@ -90,8 +92,15 @@ export class Message {
 
   @Prop({ type: [String], default: [] })
   readBy: string[];
-}
 
+  /** FR-022: Soft-delete. When true the content is hidden from all clients. */
+  @Prop({ type: Boolean, default: false })
+  isDeleted: boolean;
+
+  /** FR-027: Waveform samples pre-extracted at record time to avoid receiver re-extraction. */
+  @Prop({ type: [Number], default: [] })
+  waveformSamples: number[];
+}
 export const MessageSchema = SchemaFactory.createForClass(Message);
 
 // Compound index for efficient room message pagination queries

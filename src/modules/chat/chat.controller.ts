@@ -13,6 +13,7 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
+  Delete,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -122,6 +123,27 @@ export class ChatController {
       fileSize: file.size,
       mimeType: file.mimetype,
     };
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Block Management
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  @Post('block/:targetId')
+  @HttpCode(HttpStatus.OK)
+  async blockUser(@Request() req: any, @Param('targetId') targetId: string) {
+    return this.chatService.blockUser(req.user.userId, targetId);
+  }
+
+  @Delete('block/:targetId')
+  @HttpCode(HttpStatus.OK)
+  async unblockUser(@Request() req: any, @Param('targetId') targetId: string) {
+    return this.chatService.unblockUser(req.user.userId, targetId);
+  }
+
+  @Get('block-list')
+  async getBlockList(@Request() req: any) {
+    return this.chatService.getBlockList(req.user.userId);
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
