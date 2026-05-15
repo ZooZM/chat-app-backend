@@ -259,8 +259,8 @@ let ChatService = class ChatService {
     async getMessageByClientId(clientMessageId) {
         return this.messagesRepository.findByClientMessageId(clientMessageId);
     }
-    async softDeleteMessage(clientMessageId) {
-        await this.messagesRepository.softDelete(clientMessageId);
+    async softDeleteMessage(clientMessageId, requesterId, windowMinutes) {
+        await this.messagesRepository.softDelete(clientMessageId, requesterId, windowMinutes);
     }
 };
 exports.ChatService = ChatService;

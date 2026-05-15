@@ -59,5 +59,5 @@ export declare class ChatService {
     private assertIsAdmin;
     private resolvePhoneNumbersToObjectIds;
     getMessageByClientId(clientMessageId: string): Promise<MessageDocument | null>;
-    softDeleteMessage(clientMessageId: string): Promise<void>;
+    softDeleteMessage(clientMessageId: string, requesterId: string, windowMinutes: number): Promise<void>;
 }

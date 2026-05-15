@@ -372,6 +372,18 @@ let ChatGateway = ChatGateway_1 = class ChatGateway {
                 });
             }
         }
+        const livekitUrl = this.configService.get('LIVEKIT_WS_URL');
+        const apiKey = this.configService.get('LIVEKIT_API_KEY');
+        const apiSecret = this.configService.get('LIVEKIT_API_SECRET');
+        const callerToken = new livekit_server_sdk_1.AccessToken(apiKey, apiSecret, { identity: client.user.userId });
+        callerToken.addGrant({ roomJoin: true, room: chatRoomId, canPublish: true, canSubscribe: true });
+        const livekitToken = await callerToken.toJwt();
+        client.emit('callAccepted', {
+            chatRoomId,
+            livekitUrl,
+            livekitToken,
+            currentParticipants: [client.user.userId],
+        });
         this.logger.log(`[GroupCall] requestGroupCall room=${chatRoomId} by ${client.user.userId}`);
     }
     async handleAcceptGroupCall(client, payload) {

@@ -441,7 +441,11 @@ export class ChatService {
   }
 
   /** Soft-deletes a message: sets isDeleted=true and clears content. */
-  async softDeleteMessage(clientMessageId: string): Promise<void> {
-    await this.messagesRepository.softDelete(clientMessageId);
+  async softDeleteMessage(
+    clientMessageId: string,
+    requesterId: string,
+    windowMinutes: number,
+  ): Promise<void> {
+    await this.messagesRepository.softDelete(clientMessageId, requesterId, windowMinutes);
   }
 }
