@@ -71,6 +71,7 @@ export declare class ChatGateway implements OnGatewayConnection, OnGatewayDiscon
     handleGroupCallRecordingStateChanged(client: AuthenticatedSocket, payload: {
         chatRoomId: string;
         isRecording: boolean;
+        hasVideo?: boolean;
     }): void;
     private _handleGroupCallLeave;
     broadcastRoomUpdated(roomId: string, data: Record<string, unknown>): void;

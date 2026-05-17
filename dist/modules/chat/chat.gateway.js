@@ -90,6 +90,16 @@ let ChatGateway = ChatGateway_1 = class ChatGateway {
                     isOnline: true,
                 });
             }
+            for (const [chatRoomId, callEntry] of this.activeGroupCalls.entries()) {
+                if (roomIds.includes(chatRoomId)) {
+                    client.emit('groupCallActive', {
+                        chatRoomId,
+                        participantCount: callEntry.participants.size,
+                        isVideo: callEntry.isVideo,
+                        startedAt: callEntry.startedAt.toISOString(),
+                    });
+                }
+            }
             client.emit('connected', {
                 userId: client.user.userId,
                 joinedRooms: roomIds,
@@ -123,8 +133,8 @@ let ChatGateway = ChatGateway_1 = class ChatGateway {
                 this.activeCalls.delete(client.user.userId);
                 this.activeCalls.delete(partnerId);
             }
-            for (const [chatRoomId, participants] of this.activeGroupCalls.entries()) {
-                if (participants.has(client.user.userId)) {
+            for (const [chatRoomId, callEntry] of this.activeGroupCalls.entries()) {
+                if (callEntry.participants.has(client.user.userId)) {
                     this._handleGroupCallLeave(chatRoomId, client.user.userId);
                     break;
                 }
@@ -350,18 +360,32 @@ let ChatGateway = ChatGateway_1 = class ChatGateway {
             client.emit('callError', { reason: 'not_a_participant' });
             return;
         }
+        const startedAt = new Date();
         if (!this.activeGroupCalls.has(chatRoomId)) {
-            this.activeGroupCalls.set(chatRoomId, new Set());
+            this.activeGroupCalls.set(chatRoomId, {
+                participants: new Set(),
+                recorders: new Set(),
+                startedAt,
+                isVideo,
+            });
         }
-        this.activeGroupCalls.get(chatRoomId).add(client.user.userId);
+        this.activeGroupCalls.get(chatRoomId).participants.add(client.user.userId);
         const caller = await this.usersService.findById(client.user.userId);
         const callerName = caller?.phoneNumber ?? client.user.phoneNumber;
+        const groupCallActivePayload = {
+            chatRoomId,
+            callerId: client.user.userId,
+            callerName,
+            isVideo,
+            participantCount: 1,
+            startedAt: startedAt.toISOString(),
+        };
         for (const participantId of room.participants) {
             const id = participantId.toString();
-            if (id === client.user.userId)
-                continue;
             const participantSocket = this.activeSockets.get(id);
-            if (participantSocket) {
+            if (!participantSocket)
+                continue;
+            if (id !== client.user.userId) {
                 participantSocket.emit('incomingGroupCall', {
                     chatRoomId,
                     callerUserId: client.user.userId,
@@ -371,11 +395,15 @@ let ChatGateway = ChatGateway_1 = class ChatGateway {
                     currentParticipantCount: 1,
                 });
             }
+            participantSocket.emit('groupCallActive', groupCallActivePayload);
         }
         const livekitUrl = this.configService.get('LIVEKIT_WS_URL');
         const apiKey = this.configService.get('LIVEKIT_API_KEY');
         const apiSecret = this.configService.get('LIVEKIT_API_SECRET');
-        const callerToken = new livekit_server_sdk_1.AccessToken(apiKey, apiSecret, { identity: client.user.userId });
+        const callerToken = new livekit_server_sdk_1.AccessToken(apiKey, apiSecret, {
+            identity: client.user.userId,
+            name: client.user.phoneNumber,
+        });
         callerToken.addGrant({ roomJoin: true, room: chatRoomId, canPublish: true, canSubscribe: true });
         const livekitToken = await callerToken.toJwt();
         client.emit('callAccepted', {
@@ -383,6 +411,7 @@ let ChatGateway = ChatGateway_1 = class ChatGateway {
             livekitUrl,
             livekitToken,
             currentParticipants: [client.user.userId],
+            currentRecorders: [],
         });
         this.logger.log(`[GroupCall] requestGroupCall room=${chatRoomId} by ${client.user.userId}`);
     }
@@ -390,29 +419,33 @@ let ChatGateway = ChatGateway_1 = class ChatGateway {
         if (!client.user)
             return;
         const { chatRoomId } = payload;
-        const participants = this.activeGroupCalls.get(chatRoomId);
-        if (!participants) {
+        const callEntry = this.activeGroupCalls.get(chatRoomId);
+        if (!callEntry) {
             client.emit('callError', { reason: 'no_active_group_call' });
             return;
         }
-        if (participants.size >= 32) {
+        if (callEntry.participants.size >= 32) {
             client.emit('callError', { reason: 'group_call_full' });
             return;
         }
-        participants.add(client.user.userId);
+        callEntry.participants.add(client.user.userId);
         const livekitUrl = this.configService.get('LIVEKIT_WS_URL');
         const apiKey = this.configService.get('LIVEKIT_API_KEY');
         const apiSecret = this.configService.get('LIVEKIT_API_SECRET');
-        const token = new livekit_server_sdk_1.AccessToken(apiKey, apiSecret, { identity: client.user.userId });
+        const token = new livekit_server_sdk_1.AccessToken(apiKey, apiSecret, {
+            identity: client.user.userId,
+            name: client.user.phoneNumber,
+        });
         token.addGrant({ roomJoin: true, room: chatRoomId, canPublish: true, canSubscribe: true });
         const livekitToken = await token.toJwt();
         client.emit('callAccepted', {
             chatRoomId,
             livekitUrl,
             livekitToken,
-            currentParticipants: Array.from(participants),
+            currentParticipants: Array.from(callEntry.participants),
+            currentRecorders: Array.from(callEntry.recorders),
         });
-        for (const existingId of participants) {
+        for (const existingId of callEntry.participants) {
             if (existingId === client.user.userId)
                 continue;
             const s = this.activeSockets.get(existingId);
@@ -439,40 +472,60 @@ let ChatGateway = ChatGateway_1 = class ChatGateway {
     handleGroupCallRecordingStateChanged(client, payload) {
         if (!client.user)
             return;
-        const { chatRoomId, isRecording } = payload;
-        const participants = this.activeGroupCalls.get(chatRoomId);
-        if (!participants)
+        const { chatRoomId, isRecording, hasVideo = false } = payload;
+        const callEntry = this.activeGroupCalls.get(chatRoomId);
+        if (!callEntry)
             return;
-        for (const userId of participants) {
+        if (isRecording) {
+            callEntry.recorders.add(client.user.userId);
+        }
+        else {
+            callEntry.recorders.delete(client.user.userId);
+        }
+        for (const userId of callEntry.participants) {
             const s = this.activeSockets.get(userId);
             if (s) {
-                s.emit('groupCallRecordingStateChanged', { chatRoomId, isRecording, recorderId: client.user.userId });
+                s.emit('groupCallRecordingStateChanged', {
+                    chatRoomId,
+                    isRecording,
+                    hasVideo,
+                    recorderId: client.user.userId,
+                });
             }
         }
     }
     _handleGroupCallLeave(chatRoomId, userId) {
-        const participants = this.activeGroupCalls.get(chatRoomId);
-        if (!participants || !participants.has(userId))
+        const callEntry = this.activeGroupCalls.get(chatRoomId);
+        if (!callEntry || !callEntry.participants.has(userId))
             return;
-        participants.delete(userId);
-        for (const remainingId of participants) {
+        callEntry.participants.delete(userId);
+        callEntry.recorders.delete(userId);
+        for (const remainingId of callEntry.participants) {
             const s = this.activeSockets.get(remainingId);
             if (s) {
                 s.emit('groupCallParticipantLeft', { chatRoomId, userId });
             }
         }
-        if (participants.size === 1) {
-            const lastId = participants.values().next().value;
+        if (callEntry.participants.size === 1) {
+            const lastId = callEntry.participants.values().next().value;
             const lastSocket = this.activeSockets.get(lastId);
             if (lastSocket) {
                 lastSocket.emit('callEnded', { chatRoomId, reason: 'last-participant' });
             }
             this.activeGroupCalls.delete(chatRoomId);
+            this.server.to(chatRoomId).emit('groupCallEnded', {
+                chatRoomId,
+                reason: 'last-participant',
+            });
         }
-        else if (participants.size === 0) {
+        else if (callEntry.participants.size === 0) {
             this.activeGroupCalls.delete(chatRoomId);
+            this.server.to(chatRoomId).emit('groupCallEnded', {
+                chatRoomId,
+                reason: 'abandoned',
+            });
         }
-        this.logger.log(`[GroupCall] ${userId} left group call room=${chatRoomId}. Remaining: ${participants?.size ?? 0}`);
+        this.logger.log(`[GroupCall] ${userId} left group call room=${chatRoomId}. Remaining: ${callEntry.participants.size}`);
     }
     broadcastRoomUpdated(roomId, data) {
         this.server.to(roomId).emit('chatRoomUpdated', data);
