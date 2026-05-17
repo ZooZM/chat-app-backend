@@ -38,7 +38,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   private activeSockets = new Map<string, AuthenticatedSocket>();
   private activeCalls = new Map<string, string>(); // userId -> partnerId (1-on-1 calls)
-  private activeGroupCalls = new Map<string, Set<string>>(); // chatRoomId -> Set<userId>
+  // FR-038: extended to track recorders, start time and call type (data-model.md §3a)
+  private activeGroupCalls = new Map<string, {
+    participants: Set<string>;
+    recorders: Set<string>;
+    startedAt: Date;
+    isVideo: boolean;
+  }>();
   private userRoomIds = new Map<string, string[]>(); // userId -> roomIds (cached for disconnect broadcast)
 
   private readonly logger = new Logger(ChatGateway.name);
@@ -108,6 +114,18 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         });
       }
 
+      // T090: FR-038 replay active group calls so the client can show Join Call pill immediately
+      for (const [chatRoomId, callEntry] of this.activeGroupCalls.entries()) {
+        if (roomIds.includes(chatRoomId)) {
+          client.emit('groupCallActive', {
+            chatRoomId,
+            participantCount: callEntry.participants.size,
+            isVideo: callEntry.isVideo,
+            startedAt: callEntry.startedAt.toISOString(),
+          });
+        }
+      }
+
       // Notify the client that connection + room-joining was successful
       client.emit('connected', {
         userId: client.user.userId,
@@ -149,8 +167,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       }
 
       // --- FR-026: Clean up group calls on disconnect ---
-      for (const [chatRoomId, participants] of this.activeGroupCalls.entries()) {
-        if (participants.has(client.user.userId)) {
+      for (const [chatRoomId, callEntry] of this.activeGroupCalls.entries()) {
+        if (callEntry.participants.has(client.user.userId)) {
           this._handleGroupCallLeave(chatRoomId, client.user.userId);
           break; // A user can only be in one group call at a time
         }
@@ -493,21 +511,39 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return;
     }
 
-    // Register caller in activeGroupCalls
+    // T087: Register caller in activeGroupCalls with full tracking object
+    const startedAt = new Date();
     if (!this.activeGroupCalls.has(chatRoomId)) {
-      this.activeGroupCalls.set(chatRoomId, new Set());
+      this.activeGroupCalls.set(chatRoomId, {
+        participants: new Set(),
+        recorders: new Set(),
+        startedAt,
+        isVideo,
+      });
     }
-    this.activeGroupCalls.get(chatRoomId)!.add(client.user.userId);
+    this.activeGroupCalls.get(chatRoomId)!.participants.add(client.user.userId);
 
     const caller = await this.usersService.findById(client.user.userId);
     const callerName = caller?.phoneNumber ?? client.user.phoneNumber;
 
-    // Fan-out to all online participants except the caller
+    // Fan-out incomingGroupCall to all online participants except the caller.
+    // T088: Also broadcast groupCallActive to ALL room members (including caller)
+    //       so the Join Call AppBar pill can appear for everyone (FR-038).
+    const groupCallActivePayload = {
+      chatRoomId,
+      callerId: client.user.userId,
+      callerName,
+      isVideo,
+      participantCount: 1,
+      startedAt: startedAt.toISOString(),
+    };
+
     for (const participantId of room.participants as any[]) {
       const id = participantId.toString();
-      if (id === client.user.userId) continue;
       const participantSocket = this.activeSockets.get(id);
-      if (participantSocket) {
+      if (!participantSocket) continue;
+
+      if (id !== client.user.userId) {
         participantSocket.emit('incomingGroupCall', {
           chatRoomId,
           callerUserId: client.user.userId,
@@ -517,6 +553,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           currentParticipantCount: 1,
         });
       }
+      // groupCallActive to everyone including caller (FR-038)
+      participantSocket.emit('groupCallActive', groupCallActivePayload);
     }
 
     // Issue a LiveKit token for the caller so they can join the room immediately.
@@ -524,7 +562,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const livekitUrl = this.configService.get<string>('LIVEKIT_WS_URL');
     const apiKey = this.configService.get<string>('LIVEKIT_API_KEY');
     const apiSecret = this.configService.get<string>('LIVEKIT_API_SECRET');
-    const callerToken = new AccessToken(apiKey, apiSecret, { identity: client.user.userId });
+    const callerToken = new AccessToken(apiKey, apiSecret, {
+      identity: client.user.userId,
+      name: client.user.phoneNumber,
+    });
     callerToken.addGrant({ roomJoin: true, room: chatRoomId, canPublish: true, canSubscribe: true });
     const livekitToken = await callerToken.toJwt();
 
@@ -533,6 +574,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       livekitUrl,
       livekitToken,
       currentParticipants: [client.user.userId],
+      currentRecorders: [],
     });
 
     this.logger.log(`[GroupCall] requestGroupCall room=${chatRoomId} by ${client.user.userId}`);
@@ -547,37 +589,42 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (!client.user) return;
     const { chatRoomId } = payload;
 
-    const participants = this.activeGroupCalls.get(chatRoomId);
-    if (!participants) {
+    const callEntry = this.activeGroupCalls.get(chatRoomId);
+    if (!callEntry) {
       client.emit('callError', { reason: 'no_active_group_call' });
       return;
     }
 
     // FR-027: Hard cap at 32 participants
-    if (participants.size >= 32) {
+    if (callEntry.participants.size >= 32) {
       client.emit('callError', { reason: 'group_call_full' });
       return;
     }
 
-    participants.add(client.user.userId);
+    callEntry.participants.add(client.user.userId);
 
     // Issue a LiveKit token using the chatRoomId as the LiveKit room name
     const livekitUrl = this.configService.get<string>('LIVEKIT_WS_URL');
     const apiKey = this.configService.get<string>('LIVEKIT_API_KEY');
     const apiSecret = this.configService.get<string>('LIVEKIT_API_SECRET');
-    const token = new AccessToken(apiKey, apiSecret, { identity: client.user.userId });
+    const token = new AccessToken(apiKey, apiSecret, {
+      identity: client.user.userId,
+      name: client.user.phoneNumber,
+    });
     token.addGrant({ roomJoin: true, room: chatRoomId, canPublish: true, canSubscribe: true });
     const livekitToken = await token.toJwt();
 
+    // T089: include currentRecorders so late joiners can render the REC banner (RD-5)
     client.emit('callAccepted', {
       chatRoomId,
       livekitUrl,
       livekitToken,
-      currentParticipants: Array.from(participants),
+      currentParticipants: Array.from(callEntry.participants),
+      currentRecorders: Array.from(callEntry.recorders),
     });
 
     // Broadcast to existing participants that someone joined
-    for (const existingId of participants) {
+    for (const existingId of callEntry.participants) {
       if (existingId === client.user.userId) continue;
       const s = this.activeSockets.get(existingId);
       if (s) {
@@ -613,53 +660,77 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this._handleGroupCallLeave(payload.chatRoomId, client.user.userId);
   }
 
-  /** T049 — Recording state change; broadcasts to all participants in the group call. */
+  /** T049/T091 — Recording state change; broadcasts to all participants (includes hasVideo). */
   @SubscribeMessage('groupCallRecordingStateChanged')
   handleGroupCallRecordingStateChanged(
     @ConnectedSocket() client: AuthenticatedSocket,
-    @MessageBody() payload: { chatRoomId: string; isRecording: boolean },
+    @MessageBody() payload: { chatRoomId: string; isRecording: boolean; hasVideo?: boolean },
   ) {
     if (!client.user) return;
-    const { chatRoomId, isRecording } = payload;
-    const participants = this.activeGroupCalls.get(chatRoomId);
-    if (!participants) return;
+    const { chatRoomId, isRecording, hasVideo = false } = payload;
+    const callEntry = this.activeGroupCalls.get(chatRoomId);
+    if (!callEntry) return;
 
-    for (const userId of participants) {
+    // T087: maintain recorders set
+    if (isRecording) {
+      callEntry.recorders.add(client.user.userId);
+    } else {
+      callEntry.recorders.delete(client.user.userId);
+    }
+
+    // T091: forward hasVideo so recipients can show the correct recording type banner
+    for (const userId of callEntry.participants) {
       const s = this.activeSockets.get(userId);
       if (s) {
-        s.emit('groupCallRecordingStateChanged', { chatRoomId, isRecording, recorderId: client.user.userId });
+        s.emit('groupCallRecordingStateChanged', {
+          chatRoomId,
+          isRecording,
+          hasVideo,
+          recorderId: client.user.userId,
+        });
       }
     }
   }
 
   /** Shared leave logic used by both the explicit leaveGroupCall event and handleDisconnect. */
   private _handleGroupCallLeave(chatRoomId: string, userId: string): void {
-    const participants = this.activeGroupCalls.get(chatRoomId);
-    if (!participants || !participants.has(userId)) return;
+    const callEntry = this.activeGroupCalls.get(chatRoomId);
+    if (!callEntry || !callEntry.participants.has(userId)) return;
 
-    participants.delete(userId);
+    callEntry.participants.delete(userId);
+    callEntry.recorders.delete(userId);
 
     // Notify remaining participants
-    for (const remainingId of participants) {
+    for (const remainingId of callEntry.participants) {
       const s = this.activeSockets.get(remainingId);
       if (s) {
         s.emit('groupCallParticipantLeft', { chatRoomId, userId });
       }
     }
 
-    // FR-026: If only one participant left, end the call for them too
-    if (participants.size === 1) {
-      const lastId = participants.values().next().value as string;
+    // FR-026 / T089: If only one participant left, end the call for them;
+    //   then broadcast groupCallEnded to ALL room members (FR-038).
+    if (callEntry.participants.size === 1) {
+      const lastId = callEntry.participants.values().next().value as string;
       const lastSocket = this.activeSockets.get(lastId);
       if (lastSocket) {
         lastSocket.emit('callEnded', { chatRoomId, reason: 'last-participant' });
       }
       this.activeGroupCalls.delete(chatRoomId);
-    } else if (participants.size === 0) {
+      // Broadcast groupCallEnded to the entire room channel (FR-038)
+      this.server.to(chatRoomId).emit('groupCallEnded', {
+        chatRoomId,
+        reason: 'last-participant',
+      });
+    } else if (callEntry.participants.size === 0) {
       this.activeGroupCalls.delete(chatRoomId);
+      this.server.to(chatRoomId).emit('groupCallEnded', {
+        chatRoomId,
+        reason: 'abandoned',
+      });
     }
 
-    this.logger.log(`[GroupCall] ${userId} left group call room=${chatRoomId}. Remaining: ${participants?.size ?? 0}`);
+    this.logger.log(`[GroupCall] ${userId} left group call room=${chatRoomId}. Remaining: ${callEntry.participants.size}`);
   }
 
   /** Broadcasts a room-level update to all connected participants. */
