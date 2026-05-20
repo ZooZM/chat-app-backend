@@ -10,6 +10,12 @@ import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 import * as bcrypt from 'bcrypt';
 
+// Load-bearing per Flutter contract (specs/009-persistent-session): the Flutter
+// client treats these two 401 message strings as the only terminal session signals.
+// Any rename here MUST be coordinated with TokenRefreshService._isRevocationResponse().
+export const AUTH_ERR_REVOKED = 'Refresh token revoked';
+export const AUTH_ERR_INVALID_OR_EXPIRED = 'Invalid or expired refresh token';
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -98,12 +104,12 @@ export class AuthService {
         secret: this.configService.get<string>('JWT_SECRET') || 'default-secret',
       });
     } catch {
-      throw new UnauthorizedException('Invalid or expired refresh token');
+      throw new UnauthorizedException(AUTH_ERR_INVALID_OR_EXPIRED);
     }
 
     const user = await this.usersService.findById(payload.sub);
     if (!user || user.refreshToken !== refreshToken) {
-      throw new UnauthorizedException('Refresh token revoked');
+      throw new UnauthorizedException(AUTH_ERR_REVOKED);
     }
 
     return this.generateAuthResponse(user);
@@ -136,7 +142,7 @@ export class AuthService {
     const payload = { sub: user._id.toString(), phoneNumber: user.phoneNumber, name: user.name };
 
     const accessTokenExpiresIn = this.configService.get<string>('JWT_ACCESS_EXPIRES_IN') || '15m';
-    const refreshTokenExpiresIn = this.configService.get<string>('JWT_REFRESH_EXPIRES_IN') || '7d';
+    const refreshTokenExpiresIn = this.configService.get<string>('JWT_REFRESH_EXPIRES_IN') || '365d';
 
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(payload, { expiresIn: accessTokenExpiresIn as any }),
