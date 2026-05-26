@@ -1,20 +1,61 @@
-version: '3.8'
-services:
-  redis:
-    image: redis:alpine
-    container_name: chat-redis
-    ports:
-      - '6379:6379'
-    restart: unless-stopped
+version: '3.9'
 
+services:
+  
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: chat-app-backend
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    env_file:
+      - .env
+    environment:
+      MONGODB_URI: mongodb://mongodb:27017/chatapp
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - uploads_data:/app/uploads
+
+  
   mongodb:
-    image: mongo:latest
-    container_name: chat-mongodb
+    image: mongo:7
+    container_name: chat-mongo
+    restart: unless-stopped
     ports:
       - '27017:27017'
-    restart: unless-stopped
     volumes:
       - mongodb_data:/data/db
+    healthcheck:
+      test: ['CMD', 'mongosh', '--eval', "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  
+  redis:
+    image: redis:7-alpine
+    container_name: chat-redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 3s
+      retries: 5
 
 volumes:
   mongodb_data:
+  redis_data:
+  uploads_data:

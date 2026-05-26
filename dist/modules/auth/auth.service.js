@@ -48,13 +48,15 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.AuthService = void 0;
+exports.AuthService = exports.AUTH_ERR_INVALID_OR_EXPIRED = exports.AUTH_ERR_REVOKED = void 0;
 const common_1 = require("@nestjs/common");
 const jwt_1 = require("@nestjs/jwt");
 const users_service_1 = require("../users/users.service");
 const config_1 = require("@nestjs/config");
 const ioredis_1 = __importDefault(require("ioredis"));
 const bcrypt = __importStar(require("bcrypt"));
+exports.AUTH_ERR_REVOKED = 'Refresh token revoked';
+exports.AUTH_ERR_INVALID_OR_EXPIRED = 'Invalid or expired refresh token';
 let AuthService = class AuthService {
     usersService;
     jwtService;
@@ -125,11 +127,11 @@ let AuthService = class AuthService {
             });
         }
         catch {
-            throw new common_1.UnauthorizedException('Invalid or expired refresh token');
+            throw new common_1.UnauthorizedException(exports.AUTH_ERR_INVALID_OR_EXPIRED);
         }
         const user = await this.usersService.findById(payload.sub);
         if (!user || user.refreshToken !== refreshToken) {
-            throw new common_1.UnauthorizedException('Refresh token revoked');
+            throw new common_1.UnauthorizedException(exports.AUTH_ERR_REVOKED);
         }
         return this.generateAuthResponse(user);
     }
@@ -154,7 +156,7 @@ let AuthService = class AuthService {
     async generateAuthResponse(user) {
         const payload = { sub: user._id.toString(), phoneNumber: user.phoneNumber, name: user.name };
         const accessTokenExpiresIn = this.configService.get('JWT_ACCESS_EXPIRES_IN') || '15m';
-        const refreshTokenExpiresIn = this.configService.get('JWT_REFRESH_EXPIRES_IN') || '7d';
+        const refreshTokenExpiresIn = this.configService.get('JWT_REFRESH_EXPIRES_IN') || '365d';
         const [accessToken, refreshToken] = await Promise.all([
             this.jwtService.signAsync(payload, { expiresIn: accessTokenExpiresIn }),
             this.jwtService.signAsync(payload, { expiresIn: refreshTokenExpiresIn }),

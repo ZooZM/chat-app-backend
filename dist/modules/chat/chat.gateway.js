@@ -40,13 +40,15 @@ let ChatGateway = ChatGateway_1 = class ChatGateway {
     messagesRepository;
     pushService;
     chatRoomsRepository;
+    redis;
     server;
     activeSockets = new Map();
     activeCalls = new Map();
     activeGroupCalls = new Map();
     userRoomIds = new Map();
+    userScreenShares = new Map();
     logger = new common_1.Logger(ChatGateway_1.name);
-    constructor(jwtService, chatService, usersService, configService, messagesRepository, pushService, chatRoomsRepository) {
+    constructor(jwtService, chatService, usersService, configService, messagesRepository, pushService, chatRoomsRepository, redis) {
         this.jwtService = jwtService;
         this.chatService = chatService;
         this.usersService = usersService;
@@ -54,6 +56,7 @@ let ChatGateway = ChatGateway_1 = class ChatGateway {
         this.messagesRepository = messagesRepository;
         this.pushService = pushService;
         this.chatRoomsRepository = chatRoomsRepository;
+        this.redis = redis;
     }
     async handleConnection(client) {
         try {
@@ -139,6 +142,7 @@ let ChatGateway = ChatGateway_1 = class ChatGateway {
                     break;
                 }
             }
+            await this._handleScreenShareDisconnect(client.user.userId);
         }
         this.logger.log(`[WS DISCONNECTED] Socket: ${client.id} | User: ${client.user?.userId ?? 'unauthenticated'}`);
     }
@@ -527,6 +531,63 @@ let ChatGateway = ChatGateway_1 = class ChatGateway {
         }
         this.logger.log(`[GroupCall] ${userId} left group call room=${chatRoomId}. Remaining: ${callEntry.participants.size}`);
     }
+    async handleScreenShareStateChanged(client, payload) {
+        if (!client.user)
+            return;
+        const { chatRoomId, userId, userName, isSharing, withAudio } = payload;
+        if (!chatRoomId || !userId)
+            return;
+        const lockKey = `screenshare:active:${chatRoomId}`;
+        if (isSharing) {
+            const result = await this.redis.set(lockKey, userId, 'EX', 21600, 'NX');
+            if (result === 'OK') {
+                this.userScreenShares.set(userId, chatRoomId);
+                client.broadcast.to(chatRoomId).emit('screenShareStateChanged', { chatRoomId, userId, userName, isSharing, withAudio });
+                client.emit('screenShareAccepted', { chatRoomId });
+                this.logger.log(`[ScreenShare] ${userId} started sharing in room ${chatRoomId}`);
+            }
+            else {
+                const activeSharerUserId = await this.redis.get(lockKey) ?? '';
+                const activeSharer = activeSharerUserId ? await this.usersService.findById(activeSharerUserId) : null;
+                const activeSharerName = activeSharer?.name ?? activeSharer?.phoneNumber ?? '';
+                client.emit('screenShareRejected', {
+                    chatRoomId,
+                    activeSharerUserId,
+                    activeSharerName,
+                    reason: 'another_user_sharing',
+                });
+                this.logger.log(`[ScreenShare] Conflict: ${userId} tried to share in room ${chatRoomId}, blocked by ${activeSharerUserId}`);
+            }
+        }
+        else {
+            const currentSharer = await this.redis.get(lockKey);
+            if (currentSharer === userId) {
+                await this.redis.del(lockKey);
+                this.userScreenShares.delete(userId);
+                client.broadcast.to(chatRoomId).emit('screenShareStateChanged', { chatRoomId, userId, userName, isSharing, withAudio });
+                this.logger.log(`[ScreenShare] ${userId} stopped sharing in room ${chatRoomId}`);
+            }
+        }
+    }
+    async _handleScreenShareDisconnect(userId) {
+        const chatRoomId = this.userScreenShares.get(userId);
+        if (!chatRoomId)
+            return;
+        const lockKey = `screenshare:active:${chatRoomId}`;
+        const currentSharer = await this.redis.get(lockKey);
+        if (currentSharer === userId) {
+            await this.redis.del(lockKey);
+            this.server.to(chatRoomId).emit('screenShareStateChanged', {
+                chatRoomId,
+                userId,
+                userName: '',
+                isSharing: false,
+                withAudio: false,
+            });
+            this.logger.log(`[ScreenShare] Zombie lock cleared for ${userId} in room ${chatRoomId} (disconnect)`);
+        }
+        this.userScreenShares.delete(userId);
+    }
     broadcastRoomUpdated(roomId, data) {
         this.server.to(roomId).emit('chatRoomUpdated', data);
     }
@@ -671,16 +732,25 @@ __decorate([
     __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", void 0)
 ], ChatGateway.prototype, "handleGroupCallRecordingStateChanged", null);
+__decorate([
+    (0, websockets_1.SubscribeMessage)('screenShareStateChanged'),
+    __param(0, (0, websockets_1.ConnectedSocket)()),
+    __param(1, (0, websockets_1.MessageBody)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", Promise)
+], ChatGateway.prototype, "handleScreenShareStateChanged", null);
 exports.ChatGateway = ChatGateway = ChatGateway_1 = __decorate([
     (0, websockets_1.WebSocketGateway)({
         cors: { origin: '*' },
     }),
+    __param(7, (0, common_1.Inject)('REDIS_CLIENT')),
     __metadata("design:paramtypes", [jwt_1.JwtService,
         chat_service_1.ChatService,
         users_service_1.UsersService,
         config_1.ConfigService,
         messages_repository_1.MessagesRepository,
         push_service_1.PushService,
-        chat_rooms_repository_1.ChatRoomsRepository])
+        chat_rooms_repository_1.ChatRoomsRepository, Function])
 ], ChatGateway);
 //# sourceMappingURL=chat.gateway.js.map

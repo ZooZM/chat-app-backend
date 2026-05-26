@@ -7,6 +7,8 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
+export declare const AUTH_ERR_REVOKED = "Refresh token revoked";
+export declare const AUTH_ERR_INVALID_OR_EXPIRED = "Invalid or expired refresh token";
 export declare class AuthService {
     private usersService;
     private jwtService;

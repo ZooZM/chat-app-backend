@@ -9,8 +9,9 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
-import { Logger, UsePipes, ValidationPipe } from '@nestjs/common';
+import { Inject, Logger, UsePipes, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { Redis } from 'ioredis';
 import { AccessToken } from 'livekit-server-sdk';
 import { ChatService } from './chat.service';
 import { SendMessageDto } from './dto/send-message.dto';
@@ -46,6 +47,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     isVideo: boolean;
   }>();
   private userRoomIds = new Map<string, string[]>(); // userId -> roomIds (cached for disconnect broadcast)
+  // FR-012: tracks which chatRoomId each userId is actively sharing in (for disconnect cleanup)
+  private userScreenShares = new Map<string, string>(); // userId -> chatRoomId
 
   private readonly logger = new Logger(ChatGateway.name);
 
@@ -57,6 +60,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private messagesRepository: MessagesRepository,
     private pushService: PushService,
     private chatRoomsRepository: ChatRoomsRepository,
+    @Inject('REDIS_CLIENT') private readonly redis: Redis,
   ) { }
 
   async handleConnection(client: AuthenticatedSocket) {
@@ -173,6 +177,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           break; // A user can only be in one group call at a time
         }
       }
+
+      // --- T005/FR-012: Clean up screen share lock on disconnect ---
+      await this._handleScreenShareDisconnect(client.user.userId);
     }
     this.logger.log(`[WS DISCONNECTED] Socket: ${client.id} | User: ${client.user?.userId ?? 'unauthenticated'}`);
   }
@@ -731,6 +738,84 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
 
     this.logger.log(`[GroupCall] ${userId} left group call room=${chatRoomId}. Remaining: ${callEntry.participants.size}`);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Screen Share (T004 / FR-012)
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /** T004 — Single-sharer enforcement via Redis NX lock. */
+  @SubscribeMessage('screenShareStateChanged')
+  async handleScreenShareStateChanged(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() payload: {
+      chatRoomId: string;
+      userId: string;
+      userName: string;
+      isSharing: boolean;
+      withAudio: boolean;
+    },
+  ) {
+    if (!client.user) return;
+    const { chatRoomId, userId, userName, isSharing, withAudio } = payload;
+    if (!chatRoomId || !userId) return;
+
+    const lockKey = `screenshare:active:${chatRoomId}`;
+
+    if (isSharing) {
+      // Attempt to acquire the lock: SET NX with 6-hour TTL
+      const result = await this.redis.set(lockKey, userId, 'EX', 21600, 'NX');
+
+      if (result === 'OK') {
+        // Lock acquired — re-broadcast to other sockets and ACK emitter
+        this.userScreenShares.set(userId, chatRoomId);
+        client.broadcast.to(chatRoomId).emit('screenShareStateChanged', { chatRoomId, userId, userName, isSharing, withAudio });
+        client.emit('screenShareAccepted', { chatRoomId });
+        this.logger.log(`[ScreenShare] ${userId} started sharing in room ${chatRoomId}`);
+      } else {
+        // Lock conflict — inform only the rejected emitter (FR-012)
+        const activeSharerUserId = await this.redis.get(lockKey) ?? '';
+        const activeSharer = activeSharerUserId ? await this.usersService.findById(activeSharerUserId) : null;
+        const activeSharerName: string = (activeSharer as any)?.name ?? (activeSharer as any)?.phoneNumber ?? '';
+        client.emit('screenShareRejected', {
+          chatRoomId,
+          activeSharerUserId,
+          activeSharerName,
+          reason: 'another_user_sharing',
+        });
+        this.logger.log(`[ScreenShare] Conflict: ${userId} tried to share in room ${chatRoomId}, blocked by ${activeSharerUserId}`);
+      }
+    } else {
+      // Stop share — verify ownership before releasing lock
+      const currentSharer = await this.redis.get(lockKey);
+      if (currentSharer === userId) {
+        await this.redis.del(lockKey);
+        this.userScreenShares.delete(userId);
+        client.broadcast.to(chatRoomId).emit('screenShareStateChanged', { chatRoomId, userId, userName, isSharing, withAudio });
+        this.logger.log(`[ScreenShare] ${userId} stopped sharing in room ${chatRoomId}`);
+      }
+    }
+  }
+
+  /** T005 — Release screen share lock and broadcast stop on disconnect. */
+  private async _handleScreenShareDisconnect(userId: string): Promise<void> {
+    const chatRoomId = this.userScreenShares.get(userId);
+    if (!chatRoomId) return;
+
+    const lockKey = `screenshare:active:${chatRoomId}`;
+    const currentSharer = await this.redis.get(lockKey);
+    if (currentSharer === userId) {
+      await this.redis.del(lockKey);
+      this.server.to(chatRoomId).emit('screenShareStateChanged', {
+        chatRoomId,
+        userId,
+        userName: '',
+        isSharing: false,
+        withAudio: false,
+      });
+      this.logger.log(`[ScreenShare] Zombie lock cleared for ${userId} in room ${chatRoomId} (disconnect)`);
+    }
+    this.userScreenShares.delete(userId);
   }
 
   /** Broadcasts a room-level update to all connected participants. */

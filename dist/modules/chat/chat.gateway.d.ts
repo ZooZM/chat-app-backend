@@ -2,6 +2,7 @@ import { OnGatewayConnection, OnGatewayDisconnect } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import type { Redis } from 'ioredis';
 import { ChatService } from './chat.service';
 import { SendMessageDto } from './dto/send-message.dto';
 import { MarkReadDto } from './dto/mark-read.dto';
@@ -27,13 +28,15 @@ export declare class ChatGateway implements OnGatewayConnection, OnGatewayDiscon
     private messagesRepository;
     private pushService;
     private chatRoomsRepository;
+    private readonly redis;
     server: Server;
     private activeSockets;
     private activeCalls;
     private activeGroupCalls;
     private userRoomIds;
+    private userScreenShares;
     private readonly logger;
-    constructor(jwtService: JwtService, chatService: ChatService, usersService: UsersService, configService: ConfigService, messagesRepository: MessagesRepository, pushService: PushService, chatRoomsRepository: ChatRoomsRepository);
+    constructor(jwtService: JwtService, chatService: ChatService, usersService: UsersService, configService: ConfigService, messagesRepository: MessagesRepository, pushService: PushService, chatRoomsRepository: ChatRoomsRepository, redis: Redis);
     handleConnection(client: AuthenticatedSocket): Promise<void>;
     handleDisconnect(client: AuthenticatedSocket): Promise<void>;
     handleJoinRoom(client: AuthenticatedSocket, roomId: string): Promise<{
@@ -74,6 +77,14 @@ export declare class ChatGateway implements OnGatewayConnection, OnGatewayDiscon
         hasVideo?: boolean;
     }): void;
     private _handleGroupCallLeave;
+    handleScreenShareStateChanged(client: AuthenticatedSocket, payload: {
+        chatRoomId: string;
+        userId: string;
+        userName: string;
+        isSharing: boolean;
+        withAudio: boolean;
+    }): Promise<void>;
+    private _handleScreenShareDisconnect;
     broadcastRoomUpdated(roomId: string, data: Record<string, unknown>): void;
     broadcastNewChatRoom(userIds: string[], roomId: string, data: Record<string, unknown>): Promise<void>;
 }
