@@ -1,20 +1,36 @@
-name: Build & Deploy to ECS Fargate
+# Move this file to .github/workflows/deploy.yml in the repo.
+#
+# CI/CD: build & push image to GHCR, then SSH into the Hostinger VPS and
+# pull + restart via docker compose. Production .env is materialized on the
+# VPS from GitHub Actions secrets, never committed.
+#
+# Required GitHub repository secrets:
+#   VPS_HOST                 - VPS hostname or IP
+#   VPS_USER                 - SSH user (e.g. root or deploy)
+#   VPS_SSH_KEY              - PEM private key authorized on the VPS
+#   VPS_PORT                 - SSH port (default 22)
+#   VPS_APP_PATH             - absolute path to deploy dir (e.g. /opt/chat-app-backend)
+#
+#   MONGO_ROOT_USERNAME, MONGO_ROOT_PASSWORD, MONGO_DB_NAME
+#   JWT_SECRET, JWT_ACCESS_EXPIRES_IN, JWT_REFRESH_EXPIRES_IN
+#   FRONTEND_URL
+#   LIVEKIT_API_KEY, LIVEKIT_API_SECRET, LIVEKIT_WS_URL
+#   FIREBASE_SERVICE_ACCOUNT
+#   EDFAPAY_MERCHANT_ID, EDFAPAY_PASSWORD, EDFAPAY_BASE_URL
+
+name: Build & Deploy to Hostinger VPS
 
 on:
   push:
     branches:
-      - main          # Production deploy
-      - staging       # Staging deploy (optional)
+      - main
   pull_request:
     branches:
-      - main          # Run tests only, no deploy
+      - main
 
 env:
-  AWS_REGION: us-east-1                          # ← Change to your region
-  ECR_REPOSITORY: chat-app-backend               # ← Your ECR repo name
-  ECS_CLUSTER: chat-app-cluster                  # ← Your ECS cluster name
-  ECS_SERVICE: chat-app-service                  # ← Your ECS service name
-  CONTAINER_NAME: chat-app-backend               # ← Must match task definition
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   # ────────────────────────────────────────────
@@ -57,101 +73,141 @@ jobs:
           JWT_SECRET: test-secret-for-ci
           MONGODB_URI: mongodb://localhost:27017/test
           REDIS_URL: redis://localhost:6379
-
-      - name: Run e2e tests
-        run: npm run test:e2e
-        env:
-          NODE_ENV: test
-          JWT_SECRET: test-secret-for-ci
-          MONGODB_URI: mongodb://localhost:27017/test
-          REDIS_URL: redis://localhost:6379
+          LIVEKIT_API_KEY: test-key
+          LIVEKIT_API_SECRET: test-secret
+          LIVEKIT_WS_URL: wss://test.livekit.cloud
 
   # ────────────────────────────────────────────
-  # JOB 2: Build & Push Docker image to ECR
+  # JOB 2: Build & push image to GHCR
   # ────────────────────────────────────────────
   build-and-push:
-    name: Build & Push to ECR
+    name: Build & Push to GHCR
     runs-on: ubuntu-latest
     needs: test
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    permissions:
+      contents: read
+      packages: write
 
     outputs:
-      image: ${{ steps.build-image.outputs.image }}
+      image: ${{ steps.meta.outputs.tags }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest
+            type=sha,format=long
 
-      - name: Build, tag, and push image to ECR
-        id: build-image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+      - name: Build & push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   # ────────────────────────────────────────────
-  # JOB 3: Deploy to ECS Fargate
+  # JOB 3: Deploy to Hostinger VPS via SSH
   # ────────────────────────────────────────────
   deploy:
-    name: Deploy to ECS Fargate
+    name: Deploy to Hostinger VPS
     runs-on: ubuntu-latest
     needs: build-and-push
-    if: github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - name: Copy docker-compose.yml to VPS
+        uses: appleboy/scp-action@v0.1.7
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT }}
+          source: 'docker-compose.yml'
+          target: ${{ secrets.VPS_APP_PATH }}
 
-      - name: Download current ECS task definition
-        run: |
-          aws ecs describe-task-definition \
-            --task-definition chat-app-task \
-            --query taskDefinition \
-            > task-definition.json
-
-      - name: Update task definition with new image
-        id: task-def
-        uses: aws-actions/amazon-ecs-render-task-definition@v1
+      - name: Deploy on VPS
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          GHCR_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          MONGO_ROOT_USERNAME: ${{ secrets.MONGO_ROOT_USERNAME }}
+          MONGO_ROOT_PASSWORD: ${{ secrets.MONGO_ROOT_PASSWORD }}
+          MONGO_DB_NAME: ${{ secrets.MONGO_DB_NAME }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          JWT_ACCESS_EXPIRES_IN: ${{ secrets.JWT_ACCESS_EXPIRES_IN }}
+          JWT_REFRESH_EXPIRES_IN: ${{ secrets.JWT_REFRESH_EXPIRES_IN }}
+          FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
+          LIVEKIT_API_KEY: ${{ secrets.LIVEKIT_API_KEY }}
+          LIVEKIT_API_SECRET: ${{ secrets.LIVEKIT_API_SECRET }}
+          LIVEKIT_WS_URL: ${{ secrets.LIVEKIT_WS_URL }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          EDFAPAY_MERCHANT_ID: ${{ secrets.EDFAPAY_MERCHANT_ID }}
+          EDFAPAY_PASSWORD: ${{ secrets.EDFAPAY_PASSWORD }}
+          EDFAPAY_BASE_URL: ${{ secrets.EDFAPAY_BASE_URL }}
         with:
-          task-definition: task-definition.json
-          container-name: ${{ env.CONTAINER_NAME }}
-          image: ${{ needs.build-and-push.outputs.image }}
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT }}
+          envs: GHCR_IMAGE,MONGO_ROOT_USERNAME,MONGO_ROOT_PASSWORD,MONGO_DB_NAME,JWT_SECRET,JWT_ACCESS_EXPIRES_IN,JWT_REFRESH_EXPIRES_IN,FRONTEND_URL,LIVEKIT_API_KEY,LIVEKIT_API_SECRET,LIVEKIT_WS_URL,FIREBASE_SERVICE_ACCOUNT,EDFAPAY_MERCHANT_ID,EDFAPAY_PASSWORD,EDFAPAY_BASE_URL
+          script: |
+            set -euo pipefail
+            cd "${{ secrets.VPS_APP_PATH }}"
 
-      - name: Deploy to ECS
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
-        with:
-          task-definition: ${{ steps.task-def.outputs.task-definition }}
-          service: ${{ env.ECS_SERVICE }}
-          cluster: ${{ env.ECS_CLUSTER }}
-          wait-for-service-stability: true
+            # Authenticate with GHCR using the deploy user's PAT-free flow.
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
-      - name: Deployment success notification
-        if: success()
-        run: echo "✅ Deployed ${{ github.sha }} to ECS successfully"
+            # Materialize .env from secrets (umask ensures 0600).
+            umask 077
+            cat > .env <<EOF
+            PORT=3000
+            MONGO_ROOT_USERNAME=${MONGO_ROOT_USERNAME}
+            MONGO_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD}
+            MONGO_DB_NAME=${MONGO_DB_NAME}
+            JWT_SECRET=${JWT_SECRET}
+            JWT_ACCESS_EXPIRES_IN=${JWT_ACCESS_EXPIRES_IN}
+            JWT_REFRESH_EXPIRES_IN=${JWT_REFRESH_EXPIRES_IN}
+            FRONTEND_URL=${FRONTEND_URL}
+            LIVEKIT_API_KEY=${LIVEKIT_API_KEY}
+            LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET}
+            LIVEKIT_WS_URL=${LIVEKIT_WS_URL}
+            FIREBASE_SERVICE_ACCOUNT=${FIREBASE_SERVICE_ACCOUNT}
+            EDFAPAY_MERCHANT_ID=${EDFAPAY_MERCHANT_ID}
+            EDFAPAY_PASSWORD=${EDFAPAY_PASSWORD}
+            EDFAPAY_BASE_URL=${EDFAPAY_BASE_URL}
+            EOF
 
-      - name: Deployment failure notification
-        if: failure()
-        run: echo "❌ Deployment failed for ${{ github.sha }}"
+            # Override the base build with the pulled GHCR image.
+            cat > docker-compose.override.yml <<EOF
+            services:
+              app:
+                image: ${GHCR_IMAGE}
+            EOF
+
+            docker compose pull app
+            docker compose up -d --no-build --remove-orphans
+            docker image prune -f
+            docker compose ps

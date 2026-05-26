@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ThrottlerModule } from '@nestjs/throttler';
-import { ThrottlerStorageRedisService } from 'nestjs-throttler-storage-redis';
+import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storage';
 import { BullModule } from '@nestjs/bullmq';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -44,7 +44,7 @@ import * as Joi from 'joi';
             limit: 100, // 100 requests per minute by default
           },
         ],
-        storage: new ThrottlerStorageRedisService(config.get<string>('REDIS_URL') || 'redis://localhost:6379'),
+        storage: new RedisThrottlerStorage(config.get<string>('REDIS_URL') || 'redis://localhost:6379'),
       }),
     }),
 

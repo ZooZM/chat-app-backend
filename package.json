@@ -46,7 +46,6 @@
     "joi": "^18.1.2",
     "livekit-server-sdk": "^2.15.1",
     "mongoose": "^9.4.1",
-    "nestjs-throttler-storage-redis": "^0.5.1",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "reflect-metadata": "^0.2.2",

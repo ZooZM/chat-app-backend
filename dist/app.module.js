@@ -44,7 +44,7 @@ const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
 const mongoose_1 = require("@nestjs/mongoose");
 const throttler_1 = require("@nestjs/throttler");
-const nestjs_throttler_storage_redis_1 = require("nestjs-throttler-storage-redis");
+const redis_throttler_storage_1 = require("./common/throttler/redis-throttler.storage");
 const bullmq_1 = require("@nestjs/bullmq");
 const app_controller_1 = require("./app.controller");
 const app_service_1 = require("./app.service");
@@ -86,7 +86,7 @@ exports.AppModule = AppModule = __decorate([
                             limit: 100,
                         },
                     ],
-                    storage: new nestjs_throttler_storage_redis_1.ThrottlerStorageRedisService(config.get('REDIS_URL') || 'redis://localhost:6379'),
+                    storage: new redis_throttler_storage_1.RedisThrottlerStorage(config.get('REDIS_URL') || 'redis://localhost:6379'),
                 }),
             }),
             bullmq_1.BullModule.forRootAsync({
